@@ -18,7 +18,7 @@ RUN apk add --no-cache tzdata
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci --omit=dev --ignore-scripts || npm install --omit=dev
+RUN npm install --omit=dev --ignore-scripts
 
 # Copy application runtime files and EJS views
 COPY server.js ./
