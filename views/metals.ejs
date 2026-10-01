@@ -16,25 +16,37 @@
       <div>
         <div class="flex items-center gap-3">
           <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Metal Master Specifications</h1>
-          <span class="text-xs font-mono bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-1 rounded-full">
-            FactoryManager Access
-          </span>
+          <% if (currentUser.role === 'FactoryManager') { %>
+            <span class="text-xs font-mono bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-1 rounded-full">
+              FactoryManager Access
+            </span>
+          <% } else if (currentUser.role === 'Admin') { %>
+            <span class="text-xs font-mono bg-purple-950 text-purple-300 border border-purple-800 px-2.5 py-1 rounded-full">
+              Administrator Oversight
+            </span>
+          <% } else { %>
+            <span class="text-xs font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-2.5 py-1 rounded-full">
+              Auditor Catalog View
+            </span>
+          <% } %>
         </div>
         <p class="text-sm text-slate-400 mt-1">
           Catalog of precious metals, master alloys, purity standards, and tracking units of measure.
         </p>
       </div>
 
-      <button 
-        type="button" 
-        onclick="toggleAddForm()"
-        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95 transition"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
-        </svg>
-        <span id="toggleBtnText">Add Metal Specification</span>
-      </button>
+      <% if (currentUser.role === 'FactoryManager') { %>
+        <button 
+          type="button" 
+          onclick="toggleAddForm()"
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95 transition"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+          </svg>
+          <span id="toggleBtnText">Add Metal Specification</span>
+        </button>
+      <% } %>
     </div>
 
     <!-- Alert / Toast Messages -->

@@ -16,26 +16,38 @@
       <div>
         <div class="flex items-center gap-3">
           <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Melting Metallurgical Rules</h1>
-          <span class="text-xs font-mono bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-1 rounded-full">
-            FactoryManager Access
-          </span>
+          <% if (currentUser.role === 'FactoryManager') { %>
+            <span class="text-xs font-mono bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-1 rounded-full">
+              FactoryManager Access
+            </span>
+          <% } else if (currentUser.role === 'Admin') { %>
+            <span class="text-xs font-mono bg-purple-950 text-purple-300 border border-purple-800 px-2.5 py-1 rounded-full">
+              Administrator Oversight
+            </span>
+          <% } else { %>
+            <span class="text-xs font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-2.5 py-1 rounded-full">
+              Auditor Rules View
+            </span>
+          <% } %>
         </div>
         <p class="text-sm text-slate-400 mt-1">
           Configured metallurgical target purities, compute parameters, and required alloy breakdown percentages.
         </p>
       </div>
 
-      <div class="flex items-center gap-3">
-        <a 
-          href="<%= authUrl('/rules/create') %>" 
-          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95 transition"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
-          </svg>
-          <span>Create Melting Rule</span>
-        </a>
-      </div>
+      <% if (currentUser.role === 'FactoryManager') { %>
+        <div class="flex items-center gap-3">
+          <a 
+            href="<%= authUrl('/rules/create') %>" 
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95 transition"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Create Melting Rule</span>
+          </a>
+        </div>
+      <% } %>
     </div>
 
     <!-- Alert / Toast Messages -->
@@ -142,24 +154,28 @@
 
                 <!-- Actions -->
                 <td class="px-6 py-4 text-right font-sans whitespace-nowrap">
-                  <div class="inline-flex items-center gap-2">
-                    <a 
-                      href="<%= authUrl('/rules/edit/' + rule.rule_id) %>"
-                      class="text-xs text-slate-300 hover:text-amber-400 bg-slate-950 hover:bg-slate-800 px-2.5 py-1.5 rounded border border-slate-700 hover:border-amber-500/50 transition"
-                    >
-                      Edit
-                    </a>
-
-                    <form action="<%= authUrl('/rules/delete/' + rule.rule_id) %>" method="POST" class="inline" onsubmit="return confirm('Delete melting rule: <%= rule.scenario_name %>?');">
-                      <input type="hidden" name="auth" value="<%= authToken %>">
-                      <button 
-                        type="submit" 
-                        class="text-xs text-rose-400 hover:text-rose-300 bg-slate-950 hover:bg-rose-950/40 px-2.5 py-1.5 rounded border border-slate-700 hover:border-rose-500/50 transition"
+                  <% if (currentUser && currentUser.role === 'FactoryManager') { %>
+                    <div class="inline-flex items-center gap-2">
+                      <a 
+                        href="<%= authUrl('/rules/edit/' + rule.rule_id) %>"
+                        class="text-xs text-slate-300 hover:text-amber-400 bg-slate-950 hover:bg-slate-800 px-2.5 py-1.5 rounded border border-slate-700 hover:border-amber-500/50 transition"
                       >
-                        Delete
-                      </button>
-                    </form>
-                  </div>
+                        Edit
+                      </a>
+
+                      <form action="<%= authUrl('/rules/delete/' + rule.rule_id) %>" method="POST" class="inline" onsubmit="return confirm('Delete melting rule: <%= rule.scenario_name %>?');">
+                        <input type="hidden" name="auth" value="<%= authToken %>">
+                        <button 
+                          type="submit" 
+                          class="text-xs text-rose-400 hover:text-rose-300 bg-slate-950 hover:bg-rose-950/40 px-2.5 py-1.5 rounded border border-slate-700 hover:border-rose-500/50 transition"
+                        >
+                          Delete
+                        </button>
+                      </form>
+                    </div>
+                  <% } else { %>
+                    <span class="text-xs text-slate-500 font-mono">View-Only</span>
+                  <% } %>
                 </td>
               </tr>
             <% }); %>

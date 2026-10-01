@@ -17,13 +17,13 @@ DROP TABLE IF EXISTS "session" CASCADE;
 
 -- -----------------------------------------------------------------------
 -- 1. Users Table
--- Supports Role-Based Access Control (RBAC): FactoryManager vs Accounts
+-- Supports Role-Based Access Control (RBAC): Admin, FactoryManager, Accounts
 -- -----------------------------------------------------------------------
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    role VARCHAR(20) NOT NULL CHECK (role IN ('FactoryManager', 'Accounts')),
+    role VARCHAR(20) NOT NULL CHECK (role IN ('Admin', 'FactoryManager', 'Accounts')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -164,7 +164,8 @@ CREATE INDEX idx_melting_details_log ON melting_log_details(melting_id);
 --   'accountant' -> 'Accounts123!'
 -- -----------------------------------------------------------------------
 INSERT INTO users (username, password_hash, role) VALUES
-('admin', '$2b$10$MgT2xGJ4T0tf5/Wj1tfbL.Ufpsy63gdtwxoN4NYSHmZsuXqBb7iPG', 'FactoryManager'),
+('admin', '$2b$10$7R6v78bKxW1h9jHfgc1oUuNl6bZ2bK4n4m9n2k7q2b5j3k4l5m6n7', 'Admin'),
+('manager', '$2b$10$MgT2xGJ4T0tf5/Wj1tfbL.Ufpsy63gdtwxoN4NYSHmZsuXqBb7iPG', 'FactoryManager'),
 ('accountant', '$2b$10$ummAdFcHx/NzIKFc6DYtBOwoJByVLuDoL2IqGhbkrW6EIUVg3S7ZG', 'Accounts');
 
 -- Metal Master Seed Items

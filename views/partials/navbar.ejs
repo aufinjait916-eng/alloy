@@ -30,7 +30,7 @@
             Transactions
           </a>
 
-          <!-- Melting Sessions (Visible to both Roles) -->
+          <!-- Melting Sessions (Visible to all Roles) -->
           <a 
             href="<%= authUrl('/melting/sessions') %>" 
             class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition <%= path.startsWith('/melting/sessions') ? 'bg-slate-800 text-amber-400 shadow-sm border border-slate-700' : 'text-slate-300 hover:text-white hover:bg-slate-800/60' %>"
@@ -38,8 +38,8 @@
             Melting Sessions
           </a>
 
-          <!-- Melting Rules (Manager Only) -->
-          <% if (currentUser && currentUser.role === 'FactoryManager') { %>
+          <!-- Melting Rules & Metals (Manager and Admin) -->
+          <% if (currentUser && (currentUser.role === 'FactoryManager' || currentUser.role === 'Admin')) { %>
             <a 
               href="<%= authUrl('/rules') %>" 
               class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition <%= path.startsWith('/rules') ? 'bg-slate-800 text-amber-400 shadow-sm border border-slate-700' : 'text-slate-300 hover:text-white hover:bg-slate-800/60' %>"
@@ -54,13 +54,23 @@
               Metal Master
             </a>
           <% } %>
+
+          <!-- Admin Panel (Admin Only) -->
+          <% if (currentUser && currentUser.role === 'Admin') { %>
+            <a 
+              href="<%= authUrl('/admin/users') %>" 
+              class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition <%= path.startsWith('/admin') ? 'bg-purple-950 text-purple-300 border border-purple-700 shadow-sm' : 'text-purple-300 hover:text-white hover:bg-purple-950/50' %>"
+            >
+              Admin Panel
+            </a>
+          <% } %>
         </nav>
       </div>
 
       <!-- User Profile & Action Toolbar -->
       <div class="flex items-center gap-2.5">
         
-        <!-- Factory Manager Quick Action Buttons -->
+        <!-- Quick Action Buttons -->
         <% if (currentUser && currentUser.role === 'FactoryManager') { %>
           <a 
             href="<%= authUrl('/melting/prepare') %>" 
@@ -82,12 +92,30 @@
           </a>
         <% } %>
 
+        <% if (currentUser && currentUser.role === 'Admin') { %>
+          <a 
+            href="<%= authUrl('/admin/users') %>" 
+            class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/80 shadow-md transition active:scale-95"
+          >
+            <span>⚙</span>
+            <span>Admin Users</span>
+          </a>
+        <% } %>
+
         <!-- User Role Badge -->
         <% if (currentUser) { %>
           <div class="flex items-center gap-2 pl-2 border-l border-slate-800">
             <div class="text-right hidden sm:block">
-              <% if (currentUser.role === 'FactoryManager') { %>
-                <div class="text-xs font-semibold text-amber-400 font-mono">Factory Manager</div>
+              <% if (currentUser.role === 'Admin') { %>
+                <div class="text-xs font-semibold text-purple-300 font-mono"><%= currentUser.username %></div>
+                <div class="text-[10px]">
+                  <span class="text-purple-400 font-mono font-medium">Administrator</span>
+                </div>
+              <% } else if (currentUser.role === 'FactoryManager') { %>
+                <div class="text-xs font-semibold text-amber-400 font-mono"><%= currentUser.username %></div>
+                <div class="text-[10px]">
+                  <span class="text-amber-400 font-mono font-medium">Factory Manager</span>
+                </div>
               <% } else { %>
                 <div class="text-xs font-semibold text-white"><%= currentUser.username %></div>
                 <div class="text-[10px]">
@@ -97,7 +125,11 @@
             </div>
 
             <!-- Role Badge Capsule -->
-            <% if (currentUser.role === 'FactoryManager') { %>
+            <% if (currentUser.role === 'Admin') { %>
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-950/90 border border-purple-700 text-purple-300">
+                ADM
+              </span>
+            <% } else if (currentUser.role === 'FactoryManager') { %>
               <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-950/80 border border-amber-800/80 text-amber-300">
                 FM
               </span>
@@ -138,6 +170,11 @@
     <a href="<%= authUrl('/melting/sessions') %>" class="<%= path.startsWith('/melting/sessions') ? 'text-amber-400 font-bold' : 'text-slate-400' %>">
       Sessions
     </a>
+    <% if (currentUser && currentUser.role === 'Admin') { %>
+      <a href="<%= authUrl('/admin/users') %>" class="<%= path.startsWith('/admin') ? 'text-purple-300 font-bold' : 'text-slate-400' %>">
+        ⚙ Admin
+      </a>
+    <% } %>
     <% if (currentUser && currentUser.role === 'FactoryManager') { %>
       <a href="<%= authUrl('/melting/prepare') %>" class="text-amber-400 font-bold">
         🔥 Melt

@@ -16,8 +16,8 @@
       <div>
         <div class="flex items-center gap-3">
           <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Vault Inventory Dashboard</h1>
-          <span class="text-xs font-mono px-2.5 py-0.5 rounded-full <%= currentUser.role === 'FactoryManager' ? 'bg-amber-950 text-amber-300 border border-amber-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800' %>">
-            <%= currentUser.role %>
+          <span class="text-xs font-mono px-2.5 py-0.5 rounded-full <%= currentUser.role === 'Admin' ? 'bg-purple-950 text-purple-300 border border-purple-800' : (currentUser.role === 'FactoryManager' ? 'bg-amber-950 text-amber-300 border border-amber-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800') %>">
+            <%= currentUser.role === 'Admin' ? 'Administrator' : currentUser.role %>
           </span>
         </div>
         <p class="text-sm text-slate-400 mt-1">
@@ -36,6 +36,20 @@
             </svg>
             <span>Record Movement</span>
           </a>
+        <% } else if (currentUser.role === 'Admin') { %>
+          <a 
+            href="<%= authUrl('/admin/users') %>" 
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-purple-950 hover:bg-purple-900 text-purple-200 border border-purple-800 shadow-lg shadow-purple-950/20 active:scale-95 transition"
+          >
+            <span>⚙</span>
+            <span>Manage Users</span>
+          </a>
+          <div class="text-xs text-slate-400 bg-slate-900 border border-slate-800 px-3 py-2 rounded-lg flex items-center gap-2">
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <span>Admin Oversight</span>
+          </div>
         <% } else { %>
           <div class="text-xs text-slate-400 bg-slate-900 border border-slate-800 px-3 py-2 rounded-lg flex items-center gap-2">
             <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

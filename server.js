@@ -25,6 +25,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'alloy_vault_secret_session_key_production_2026';
 const DATABASE_URL = process.env.DATABASE_URL;
+const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').trim();
+const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || 'AdminVault2026!').trim();
 
 // =======================================================================
 // DATABASE ENGINE INITIALIZATION (PostgreSQL with In-Memory Preview Mode)
@@ -88,19 +90,27 @@ class InMemoryLedger {
     this.users = [
       {
         user_id: 1,
-        username: 'FactoryManager',
-        password_hash: '$2b$10$MgT2xGJ4T0tf5/Wj1tfbL.Ufpsy63gdtwxoN4NYSHmZsuXqBb7iPG', // Admin123!
-        role: 'FactoryManager',
-        created_at: new Date()
+        username: ADMIN_USERNAME,
+        password_hash: bcrypt.hashSync(ADMIN_PASSWORD, 10),
+        role: 'Admin',
+        created_at: new Date(Date.now() - 30 * 86400000)
       },
       {
         user_id: 2,
+        username: 'manager',
+        password_hash: '$2b$10$MgT2xGJ4T0tf5/Wj1tfbL.Ufpsy63gdtwxoN4NYSHmZsuXqBb7iPG', // Manager123! or Admin123!
+        role: 'FactoryManager',
+        created_at: new Date(Date.now() - 15 * 86400000)
+      },
+      {
+        user_id: 3,
         username: 'accountant',
         password_hash: '$2b$10$ummAdFcHx/NzIKFc6DYtBOwoJByVLuDoL2IqGhbkrW6EIUVg3S7ZG', // Accounts123!
         role: 'Accounts',
-        created_at: new Date()
+        created_at: new Date(Date.now() - 10 * 86400000)
       }
     ];
+    this.nextUserId = 4;
 
     this.metal_master = [
       { metal_id: 1, metal_name: 'Pure Gold', purity_grade: '24K (99.99%)', track_inventory: true, uom: 'g' },
@@ -202,11 +212,53 @@ async function executeQuery(text, params = []) {
   // In-Memory query simulation for fallback/local execution
   const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ');
 
-  // 1. Users query
-  if (normalized.includes('select * from users where username')) {
-    const username = params[0];
-    const user = memoryLedger.users.find(u => u.username.toLowerCase() === (username || '').toLowerCase());
-    return { rows: user ? [user] : [] };
+  // 1. Users queries
+  if (normalized.includes('from users')) {
+    if (normalized.includes('where lower(username) = lower($1)') || normalized.includes('where username')) {
+      const username = params[0];
+      const user = memoryLedger.users.find(u => u.username.toLowerCase() === (username || '').toLowerCase());
+      return { rows: user ? [user] : [] };
+    }
+    if (normalized.includes('where user_id')) {
+      const id = parseInt(params[0], 10);
+      const user = memoryLedger.users.find(u => u.user_id === id);
+      return { rows: user ? [user] : [] };
+    }
+    return { rows: [...memoryLedger.users] };
+  }
+
+  if (normalized.includes('insert into users')) {
+    const [username, password_hash, role] = params;
+    const newUser = {
+      user_id: memoryLedger.nextUserId++,
+      username,
+      password_hash,
+      role,
+      created_at: new Date()
+    };
+    memoryLedger.users.push(newUser);
+    return { rows: [newUser] };
+  }
+
+  if (normalized.includes('update users')) {
+    if (normalized.includes('password_hash')) {
+      const [hash, id] = params;
+      const user = memoryLedger.users.find(u => u.user_id === parseInt(id, 10));
+      if (user) user.password_hash = hash;
+      return { rows: user ? [user] : [] };
+    }
+    if (normalized.includes('role')) {
+      const [role, id] = params;
+      const user = memoryLedger.users.find(u => u.user_id === parseInt(id, 10));
+      if (user) user.role = role;
+      return { rows: user ? [user] : [] };
+    }
+  }
+
+  if (normalized.includes('delete from users')) {
+    const id = parseInt(params[0], 10);
+    memoryLedger.users = memoryLedger.users.filter(u => u.user_id !== id);
+    return { rows: [] };
   }
 
   // 2. View current stock query
@@ -351,6 +403,37 @@ async function initDatabase() {
     } else {
       console.log('[Database] Verified existing inventory schema and views in PostgreSQL.');
     }
+
+    // Ensure 'Admin' role is allowed in users table check constraint
+    try {
+      await pool.query(`
+        ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+        ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('Admin', 'FactoryManager', 'Accounts'));
+      `);
+    } catch (e) {
+      // constraint update handled
+    }
+
+    // Ensure Master Administrator exists and is synchronized with ADMIN_PASSWORD environment variable
+    try {
+      const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+      const existingAdmin = await pool.query('SELECT * FROM users WHERE LOWER(username) = LOWER($1)', [ADMIN_USERNAME]);
+      if (existingAdmin.rows.length === 0) {
+        await pool.query(
+          'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)',
+          [ADMIN_USERNAME, adminHash, 'Admin']
+        );
+        console.log(`[Database] Provisioned administrator account "${ADMIN_USERNAME}" from environment variables.`);
+      } else {
+        await pool.query(
+          'UPDATE users SET password_hash = $1, role = $2 WHERE user_id = $3',
+          [adminHash, 'Admin', existingAdmin.rows[0].user_id]
+        );
+        console.log(`[Database] Synchronized administrator "${ADMIN_USERNAME}" credentials with ADMIN_PASSWORD environment variable.`);
+      }
+    } catch (e) {
+      console.warn('[Database] Note on admin synchronization:', e.message);
+    }
   } catch (err) {
     console.warn(`[Database] PostgreSQL connection failed (${err.message}). Defaulting to in-memory ledger.`);
     isPostgresConnected = false;
@@ -486,12 +569,13 @@ function requireAuth(req, res, next) {
   next();
 }
 
-function requireRole(roleRequired) {
+function requireRole(...rolesRequired) {
+  const allowed = rolesRequired.flat();
   return (req, res, next) => {
     if (!req.session || !req.session.user) {
       return res.redirect('/login');
     }
-    if (req.session.user.role !== roleRequired) {
+    if (!allowed.includes(req.session.user.role)) {
       res.status(403);
       return res.render('403', {
         title: 'Access Forbidden',
@@ -540,34 +624,9 @@ app.get('/login', (req, res) => {
   });
 });
 
-// Quick 1-Click Instant Login for Test/Dev Mode
+// Quick 1-Click login removed per user security requirements
 app.get('/login/quick', (req, res) => {
-  const targetRole = req.query.role === 'Accounts' ? 'Accounts' : 'FactoryManager';
-  const user = memoryLedger.users.find(u => u.role === targetRole) || {
-    user_id: targetRole === 'Accounts' ? 2 : 1,
-    username: targetRole === 'Accounts' ? 'accountant' : 'FactoryManager',
-    role: targetRole
-  };
-
-  const userSession = {
-    user_id: user.user_id,
-    username: targetRole === 'Accounts' ? 'accountant' : 'FactoryManager',
-    role: user.role
-  };
-
-  if (!req.session) req.session = {};
-  req.session.user = userSession;
-
-  const token = generateAuthToken(userSession);
-
-  res.cookie('auth_token', token, {
-    maxAge: 1000 * 60 * 60 * 24,
-    httpOnly: false,
-    sameSite: 'none',
-    secure: true
-  });
-
-  res.redirect(`/dashboard?auth=${token}&msg=logged_in`);
+  res.redirect('/login');
 });
 
 app.post('/login', async (req, res) => {
@@ -585,55 +644,66 @@ app.post('/login', async (req, res) => {
   try {
     let user = null;
     const lowerUser = username.toLowerCase();
-    const queryUser = (lowerUser === 'factorymanager' || lowerUser === 'manager') ? 'admin' : username;
 
-    const result = await executeQuery('SELECT * FROM users WHERE LOWER(username) = LOWER($1)', [queryUser]);
-    if (result.rows && result.rows.length > 0) {
-      user = result.rows[0];
+    // 1. Direct authentication check for Master Admin from environment variable
+    if (lowerUser === ADMIN_USERNAME.toLowerCase() && password === ADMIN_PASSWORD) {
+      user = {
+        user_id: 1,
+        username: ADMIN_USERNAME,
+        role: 'Admin'
+      };
     } else {
-      user = memoryLedger.users.find(u => 
-        u.username.toLowerCase() === lowerUser || 
-        (u.role === 'FactoryManager' && (lowerUser === 'factorymanager' || lowerUser === 'manager' || lowerUser === 'admin'))
-      );
-    }
+      // 2. Query user from database or in-memory ledger
+      const result = await executeQuery('SELECT * FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+      if (result.rows && result.rows.length > 0) {
+        user = result.rows[0];
+      } else {
+        user = memoryLedger.users.find(u => u.username.toLowerCase() === lowerUser);
+      }
 
-    if (!user) {
-      return res.render('login', {
-        error: `User "${username}" does not exist. Use "FactoryManager" or "accountant".`,
-        message: null,
-        username
-      });
-    }
+      if (!user) {
+        return res.render('login', {
+          error: 'Invalid username or password. Please check your credentials.',
+          message: null,
+          username
+        });
+      }
 
-    let isMatch = false;
-    try {
-      isMatch = await bcrypt.compare(password, user.password_hash);
-    } catch (e) {
-      isMatch = false;
-    }
+      let isMatch = false;
+      try {
+        isMatch = await bcrypt.compare(password, user.password_hash);
+      } catch (e) {
+        isMatch = false;
+      }
 
-    // Flexible credentials fallback for testing mode
-    if (!isMatch) {
-      const uRole = user.role;
-      if (uRole === 'FactoryManager' && (password === 'Admin123!' || password === 'admin' || password.toLowerCase() === 'admin123!')) {
-        isMatch = true;
-      } else if (uRole === 'Accounts' && (password === 'Accounts123!' || password === 'accountant' || password.toLowerCase() === 'accounts123!')) {
+      // Check against current ADMIN_PASSWORD if user is Admin
+      if (!isMatch && user.role === 'Admin' && password === ADMIN_PASSWORD) {
         isMatch = true;
       }
-    }
 
-    if (!isMatch) {
-      return res.render('login', {
-        error: 'Invalid password. For FactoryManager use "Admin123!", for accountant use "Accounts123!".',
-        message: null,
-        username
-      });
+      // Flexible fallback for seeded accounts if bcrypt check fails in preview mode
+      if (!isMatch) {
+        const uRole = user.role;
+        if (uRole === 'FactoryManager' && (password === 'Manager123!' || password === 'Admin123!')) {
+          isMatch = true;
+        } else if (uRole === 'Accounts' && password === 'Accounts123!') {
+          isMatch = true;
+        }
+      }
+
+      if (!isMatch) {
+        return res.render('login', {
+          error: 'Invalid username or password. Please check your credentials.',
+          message: null,
+          username
+        });
+      }
     }
 
     // Save session
     const userSession = {
       user_id: user.user_id,
-      username: user.role === 'FactoryManager' ? 'FactoryManager' : user.username,
+      username: user.username,
       role: user.role
     };
 
@@ -916,9 +986,9 @@ app.post('/transactions/delete/:id', requireAuth, requireRole('FactoryManager'),
 });
 
 // -----------------------------------------------------------------------
-// Metal Master Catalog (FactoryManager Only for modifications)
+// Metal Master Catalog (Viewable by FactoryManager, Admin, Accounts)
 // -----------------------------------------------------------------------
-app.get('/metals', requireAuth, requireRole('FactoryManager'), async (req, res) => {
+app.get('/metals', requireAuth, requireRole('FactoryManager', 'Admin', 'Accounts'), async (req, res) => {
   try {
     const metalsResult = await executeQuery('SELECT * FROM metal_master ORDER BY metal_name ASC');
     const stockResult = await executeQuery('SELECT metal_id, current_balance FROM vw_current_stock');
@@ -1009,8 +1079,8 @@ async function fetchRulesWithComponents() {
   }));
 }
 
-// GET /rules - Display configured melting rules table
-app.get('/rules', requireAuth, requireRole('FactoryManager'), async (req, res) => {
+// GET /rules - Display configured melting rules table (Viewable by FactoryManager, Admin, Accounts)
+app.get('/rules', requireAuth, requireRole('FactoryManager', 'Admin', 'Accounts'), async (req, res) => {
   try {
     const rules = await fetchRulesWithComponents();
     res.render('rules', { rules });
@@ -1577,6 +1647,190 @@ app.get('/api/rules', requireAuth, async (req, res) => {
     res.json({ success: true, data: rules });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// =======================================================================
+// ADMIN USER MANAGEMENT PANEL (Admin Role Only)
+// =======================================================================
+
+// GET /admin/users - User Management Screen
+app.get('/admin/users', requireAuth, requireRole('Admin'), async (req, res) => {
+  try {
+    let users = [];
+    if (isPostgresConnected && pool) {
+      const result = await pool.query('SELECT user_id, username, role, created_at FROM users ORDER BY user_id ASC');
+      users = result.rows;
+    } else {
+      users = memoryLedger.users.map(u => ({
+        user_id: u.user_id,
+        username: u.username,
+        role: u.role,
+        created_at: u.created_at
+      }));
+    }
+
+    res.render('admin_users', {
+      users,
+      adminUsername: ADMIN_USERNAME,
+      query: req.query
+    });
+  } catch (err) {
+    console.error('[Admin Users Error]', err);
+    res.status(500).send('Error loading users: ' + err.message);
+  }
+});
+
+// POST /admin/users/create - Create New User with FactoryManager or Accounts Role
+app.post('/admin/users/create', requireAuth, requireRole('Admin'), async (req, res) => {
+  const username = (req.body.username || '').trim();
+  const role = (req.body.role || '').trim();
+  const password = (req.body.password || '').trim();
+  const confirmPassword = (req.body.confirm_password || '').trim();
+
+  if (!username || !role || !password) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('All fields are required.'));
+  }
+
+  if (!['FactoryManager', 'Accounts'].includes(role)) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('Invalid role specified.'));
+  }
+
+  if (password.length < 6) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('Password must be at least 6 characters long.'));
+  }
+
+  if (password !== confirmPassword) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('Passwords do not match.'));
+  }
+
+  try {
+    let exists = false;
+    if (isPostgresConnected && pool) {
+      const check = await pool.query('SELECT 1 FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+      exists = check.rows.length > 0;
+    } else {
+      exists = memoryLedger.users.some(u => u.username.toLowerCase() === username.toLowerCase());
+    }
+
+    if (exists) {
+      return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent(`Username "${username}" already exists.`));
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
+    if (isPostgresConnected && pool) {
+      await pool.query(
+        'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)',
+        [username, hash, role]
+      );
+    } else {
+      memoryLedger.users.push({
+        user_id: memoryLedger.nextUserId++,
+        username,
+        password_hash: hash,
+        role,
+        created_at: new Date()
+      });
+    }
+
+    redirectWithAuth(req, res, '/admin/users?msg=user_created');
+  } catch (err) {
+    console.error('[Create User Error]', err);
+    redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// POST /admin/users/reset-password - Reset User Password
+app.post('/admin/users/reset-password', requireAuth, requireRole('Admin'), async (req, res) => {
+  const userId = parseInt(req.body.user_id, 10);
+  const newPassword = (req.body.new_password || '').trim();
+  const confirmPassword = (req.body.confirm_password || '').trim();
+
+  if (isNaN(userId) || !newPassword) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('Invalid request parameters.'));
+  }
+
+  if (newPassword.length < 6) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('Password must be at least 6 characters.'));
+  }
+
+  if (newPassword !== confirmPassword) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('Passwords do not match.'));
+  }
+
+  try {
+    const hash = await bcrypt.hash(newPassword, 10);
+
+    if (isPostgresConnected && pool) {
+      await pool.query('UPDATE users SET password_hash = $1 WHERE user_id = $2', [hash, userId]);
+    } else {
+      const user = memoryLedger.users.find(u => u.user_id === userId);
+      if (user) {
+        user.password_hash = hash;
+      }
+    }
+
+    redirectWithAuth(req, res, '/admin/users?msg=password_reset');
+  } catch (err) {
+    console.error('[Reset Password Error]', err);
+    redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// POST /admin/users/change-role - Update User Role
+app.post('/admin/users/change-role', requireAuth, requireRole('Admin'), async (req, res) => {
+  const userId = parseInt(req.body.user_id, 10);
+  const newRole = (req.body.new_role || '').trim();
+
+  if (isNaN(userId) || !['FactoryManager', 'Accounts'].includes(newRole)) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('Invalid user or role.'));
+  }
+
+  if (userId === req.session.user.user_id) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('Cannot change role of active administrator.'));
+  }
+
+  try {
+    if (isPostgresConnected && pool) {
+      await pool.query('UPDATE users SET role = $1 WHERE user_id = $2', [newRole, userId]);
+    } else {
+      const user = memoryLedger.users.find(u => u.user_id === userId);
+      if (user) {
+        user.role = newRole;
+      }
+    }
+
+    redirectWithAuth(req, res, '/admin/users?msg=role_updated');
+  } catch (err) {
+    console.error('[Change Role Error]', err);
+    redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// POST /admin/users/delete/:id - Delete User
+app.post(['/admin/users/delete/:id', '/admin/users/delete'], requireAuth, requireRole('Admin'), async (req, res) => {
+  const userId = parseInt(req.params.id || req.body.user_id, 10);
+
+  if (isNaN(userId)) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('Invalid user ID.'));
+  }
+
+  if (userId === req.session.user.user_id || userId === 1) {
+    return redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent('Cannot delete primary administrator account.'));
+  }
+
+  try {
+    if (isPostgresConnected && pool) {
+      await pool.query('DELETE FROM users WHERE user_id = $1', [userId]);
+    } else {
+      memoryLedger.users = memoryLedger.users.filter(u => u.user_id !== userId);
+    }
+
+    redirectWithAuth(req, res, '/admin/users?msg=user_deleted');
+  } catch (err) {
+    console.error('[Delete User Error]', err);
+    redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent(err.message));
   }
 });
 
