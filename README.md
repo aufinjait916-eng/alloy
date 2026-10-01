@@ -21,7 +21,7 @@ Designed for storage on **GitHub**, containerized hosting on a **TrueNAS SCALE**
 
 | Role | Username | Default Password | Permissions & Capabilities |
 | :--- | :--- | :--- | :--- |
-| **Factory Manager** | `admin` | `Admin123!` | **Full Metallurgical & CRUD Access:** Configure melting rules; prepare & execute crucible sessions; add, edit, and delete transactions with stock impact warnings; manage metal catalog. |
+| **Factory Manager** | `FactoryManager` | `Admin123!` | **Full Metallurgical & CRUD Access:** Configure melting rules; prepare & execute crucible sessions; add, edit, and delete transactions with stock impact warnings; manage metal catalog. |
 | **Accounts User** | `accountant` | `Accounts123!` | **Read-Only Auditor:** View real-time alloy balances, completed melting sessions, and batch detail breakdowns. Mutation routes are protected by HTTP 403 Forbidden checks. |
 
 ---
@@ -121,32 +121,72 @@ Given:
 
 ---
 
-## 7. TrueNAS SCALE & Docker Deployment Guide
+## 7. GitHub Upload & Publishing Workflows
 
-The repository includes a production-grade `Dockerfile` and `docker-compose.yml` pre-configured with container healthchecks, volume persistence, and automatic schema initialization.
+This repository is pre-configured with two automated GitHub Actions workflows in `.github/workflows/`:
+1. **Continuous Integration (`ci.yml`):** Automatically tests and validates linting (`npm run lint`) and server boot on every push and pull request.
+2. **Docker Publishing (`docker-publish.yml`):** Automatically builds multi-architecture container images (`linux/amd64`, `linux/arm64`) and publishes them to the **GitHub Container Registry (GHCR)** at `ghcr.io/<your-username>/alloy-inventory-system:latest`.
 
-### Step 1: Push Code to GitHub
+---
+
+### Step-by-Step: Upload to GitHub & Trigger Publishing
+
+#### 1. Initialize Git & Create Initial Commit
+From your terminal in the application root directory:
 ```bash
 git init
 git add .
-git commit -m "feat: complete alloy inventory and metallurgical melting session system"
+git commit -m "feat: complete alloy inventory system with TrueNAS SCALE support and CI/CD"
 git branch -M main
+```
+
+#### 2. Link Remote Repository & Push
+Create an empty repository on [GitHub](https://github.com/new) named `alloy-inventory-system` (or your preferred name), then run:
+```bash
 git remote add origin https://github.com/<your-username>/alloy-inventory-system.git
 git push -u origin main
 ```
 
-### Step 2: Prepare Storage Dataset in TrueNAS SCALE
-1. Open the **TrueNAS SCALE Web UI**.
-2. Navigate to **Datasets** &rarr; Select your pool (e.g. `tank`).
-3. Click **Add Dataset** and create:
-   - Path: `/mnt/tank/apps/alloy_vault`
-   - Dataset: `db` (for PostgreSQL data files)
-4. Ensure the dataset permissions permit read/write access for container users.
+#### 3. Automatic Publication on GitHub
+Once you push to `main`:
+1. GitHub Actions will trigger **Lint & Build Validation** and **Build & Push Docker Image**.
+2. The image will be built and published directly to your GitHub Packages:
+   ```text
+   ghcr.io/<your-username>/alloy-inventory-system:latest
+   ```
+3. To make the package public on GitHub:
+   - Go to your GitHub profile &rarr; **Packages** &rarr; Select `alloy-inventory-system`.
+   - Click **Package settings** &rarr; Under **Danger Zone**, click **Change visibility** &rarr; Set to **Public**.
 
-### Step 3: Deploy via TrueNAS SCALE Compose / Dockge / Portainer
-1. Clone the repository into your TrueNAS apps directory via SSH:
+---
+
+## 8. TrueNAS SCALE Deployment
+
+You can deploy the application on TrueNAS SCALE in two ways:
+
+### Option A: Using TrueNAS Custom App (Pull Published Image)
+In the TrueNAS SCALE Web UI:
+1. Navigate to **Apps** &rarr; **Discover Apps** &rarr; **Custom App**.
+2. **Application Name:** `alloy-vault`
+3. **Image repository:** `ghcr.io/<your-username>/alloy-inventory-system` (Tag: `latest`)
+4. **Port Forwarding:** Host Port `3000` &rarr; Container Port `3000`
+5. **Environment Variables:**
+   - `PORT`: `3000`
+   - `POSTGRES_HOST`: `<your-postgres-host-or-ip>`
+   - `POSTGRES_PORT`: `5432`
+   - `POSTGRES_DB`: `alloy_db`
+   - `POSTGRES_USER`: `alloy_user`
+   - `POSTGRES_PASSWORD`: `<your-password>`
+   - `SESSION_SECRET`: `<random-secure-string>`
+6. Click **Install**. The app will start, connect to PostgreSQL, and auto-initialize the database schema.
+
+---
+
+### Option B: Using Docker Compose / TrueNAS App Compose
+1. SSH into your TrueNAS SCALE server:
    ```bash
    ssh admin@<truenas-ip>
+   mkdir -p /mnt/tank/apps/alloy_vault
    cd /mnt/tank/apps/alloy_vault
    git clone https://github.com/<your-username>/alloy-inventory-system.git app
    cd app
@@ -156,13 +196,13 @@ git push -u origin main
    cp .env.example .env
    nano .env
    ```
-3. Start the stack:
+3. Start the application and PostgreSQL stack together:
    ```bash
-   docker compose up -d --build
+   docker compose up -d
    ```
 
 ---
 
-## 8. License
+## 9. License
 
 Apache-2.0 License. Built for TrueNAS SCALE, Docker, and industrial metallurgical facilities.
