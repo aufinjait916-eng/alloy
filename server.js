@@ -358,6 +358,35 @@ async function executeQuery(text, params = []) {
     return { rows: [newMetal] };
   }
 
+  // 10. Update Metal Master
+  if (normalized.includes('update metal_master set')) {
+    const [metal_name, purity_grade, track_inventory, uom, metal_id] = params;
+    const id = parseInt(metal_id, 10);
+    const m = memoryLedger.metal_master.find(x => x.metal_id === id);
+    if (m) {
+      m.metal_name = metal_name;
+      m.purity_grade = purity_grade;
+      m.track_inventory = Boolean(track_inventory);
+      m.uom = uom || 'g';
+    }
+    return { rowCount: m ? 1 : 0 };
+  }
+
+  // 11. Delete Metal Master
+  if (normalized.includes('delete from metal_master where metal_id')) {
+    const id = parseInt(params[0], 10);
+    const beforeLen = memoryLedger.metal_master.length;
+    memoryLedger.metal_master = memoryLedger.metal_master.filter(x => x.metal_id !== id);
+    return { rowCount: beforeLen - memoryLedger.metal_master.length };
+  }
+
+  // 12. Single Metal Query
+  if (normalized.includes('from metal_master where metal_id')) {
+    const id = parseInt(params[0], 10);
+    const m = memoryLedger.metal_master.find(x => x.metal_id === id);
+    return { rows: m ? [m] : [] };
+  }
+
   return { rows: [] };
 }
 
@@ -1028,6 +1057,97 @@ app.post('/metals/add', requireAuth, requireRole('FactoryManager'), async (req, 
   } catch (err) {
     console.error('[Add Metal Error]', err);
     res.status(500).send('Error saving metal specification: ' + err.message);
+  }
+});
+
+// Edit Metal Specification (FactoryManager Only)
+app.post(['/metals/edit/:id', '/metals/edit'], requireAuth, requireRole('FactoryManager'), async (req, res) => {
+  const metalId = parseInt(req.params.id || req.body.metal_id, 10);
+  const { metal_name, purity_grade, track_inventory, uom } = req.body;
+
+  if (isNaN(metalId)) {
+    return redirectWithAuth(req, res, '/metals?error=invalid_metal_id');
+  }
+
+  if (!metal_name || !purity_grade) {
+    return redirectWithAuth(req, res, '/metals?error=' + encodeURIComponent('Metal name and purity specification are required.'));
+  }
+
+  try {
+    await executeQuery(`
+      UPDATE metal_master 
+      SET metal_name = $1, purity_grade = $2, track_inventory = $3, uom = $4
+      WHERE metal_id = $5
+    `, [
+      metal_name.trim(),
+      purity_grade.trim(),
+      track_inventory === 'true' || track_inventory === 'on' || track_inventory === true,
+      uom || 'g',
+      metalId
+    ]);
+
+    redirectWithAuth(req, res, '/metals?msg=metal_updated');
+  } catch (err) {
+    console.error('[Edit Metal Error]', err);
+    redirectWithAuth(req, res, '/metals?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// Delete Metal Specification (FactoryManager Only)
+app.post(['/metals/delete/:id', '/metals/delete'], requireAuth, requireRole('FactoryManager'), async (req, res) => {
+  const metalId = parseInt(req.params.id || req.body.metal_id, 10);
+  if (isNaN(metalId)) {
+    return redirectWithAuth(req, res, '/metals?error=invalid_metal_id');
+  }
+
+  try {
+    // Check metal existence & name
+    let metalName = 'Metal #' + metalId;
+    const metalCheck = await executeQuery('SELECT * FROM metal_master WHERE metal_id = $1', [metalId]);
+    if (metalCheck.rows && metalCheck.rows[0]) {
+      metalName = metalCheck.rows[0].metal_name;
+    }
+
+    // Dependency check 1: Inventory transactions
+    let txCount = 0;
+    if (isPostgresConnected && pool) {
+      const res = await pool.query('SELECT COUNT(*) as count FROM inventory_transactions WHERE metal_id = $1', [metalId]);
+      txCount = parseInt(res.rows[0].count, 10);
+    } else {
+      txCount = memoryLedger.inventory_transactions.filter(t => t.metal_id === metalId).length;
+    }
+
+    // Dependency check 2: Melting rule components
+    let ruleCompCount = 0;
+    if (isPostgresConnected && pool) {
+      const res = await pool.query('SELECT COUNT(*) as count FROM rule_components WHERE metal_id = $1', [metalId]);
+      ruleCompCount = parseInt(res.rows[0].count, 10);
+    } else {
+      ruleCompCount = memoryLedger.rule_components.filter(c => c.metal_id === metalId).length;
+    }
+
+    // Dependency check 3: Melting log details
+    let logDetailCount = 0;
+    if (isPostgresConnected && pool) {
+      const res = await pool.query('SELECT COUNT(*) as count FROM melting_log_details WHERE metal_id = $1', [metalId]);
+      logDetailCount = parseInt(res.rows[0].count, 10);
+    } else {
+      logDetailCount = memoryLedger.melting_log_details.filter(d => d.metal_id === metalId).length;
+    }
+
+    if (txCount > 0 || ruleCompCount > 0 || logDetailCount > 0) {
+      const reasons = [];
+      if (txCount > 0) reasons.push(`${txCount} vault inventory transaction(s)`);
+      if (ruleCompCount > 0) reasons.push(`${ruleCompCount} melting recipe component(s)`);
+      if (logDetailCount > 0) reasons.push(`${logDetailCount} executed crucible session charge(s)`);
+      return redirectWithAuth(req, res, '/metals?error=' + encodeURIComponent(`Cannot delete "${metalName}": It is referenced by ${reasons.join(', ')}. Please delete or unlink those records before removing this metal.`));
+    }
+
+    await executeQuery('DELETE FROM metal_master WHERE metal_id = $1', [metalId]);
+    redirectWithAuth(req, res, '/metals?msg=metal_deleted');
+  } catch (err) {
+    console.error('[Delete Metal Error]', err);
+    redirectWithAuth(req, res, '/metals?error=' + encodeURIComponent(err.message));
   }
 });
 
