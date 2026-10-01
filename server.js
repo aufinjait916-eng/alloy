@@ -140,7 +140,8 @@ class InMemoryLedger {
       { rule_id: 1, scenario_name: '18K Yellow Gold Ingot Melt', target_purity: 75.00, compute_parameter: 'E', compute_percentage: 25.0000, purity_min: 50.00, purity_max: 80.00, created_at: new Date(Date.now() - 5 * 86400000) },
       { rule_id: 2, scenario_name: '14K Rose Gold Crucible Run', target_purity: 58.50, compute_parameter: 'E', compute_percentage: 35.0000, purity_min: 45.00, purity_max: 70.00, created_at: new Date(Date.now() - 4 * 86400000) },
       { rule_id: 3, scenario_name: '925 Sterling Silver Casting Bar', target_purity: 92.50, compute_parameter: 'C', compute_percentage: 50.0000, purity_min: 99.00, purity_max: 99.99, created_at: new Date(Date.now() - 3 * 86400000) },
-      { rule_id: 4, scenario_name: '14K Custom Crown Gold (142.86%)', target_purity: 58.50, compute_parameter: 'E', compute_percentage: 142.8600, purity_min: 40.00, purity_max: 75.00, created_at: new Date(Date.now() - 1 * 86400000) }
+      { rule_id: 4, scenario_name: '14K Custom Crown Gold (142.86%)', target_purity: 58.50, compute_parameter: 'E', compute_percentage: 142.8600, purity_min: 40.00, purity_max: 75.00, created_at: new Date(Date.now() - 1 * 86400000) },
+      { rule_id: 5, scenario_name: '18K Direct Scrap Conversion (None)', target_purity: 75.00, compute_parameter: 'None', compute_percentage: 0.0000, purity_min: 75.00, purity_max: 99.90, created_at: new Date() }
     ];
 
     this.rule_components = [
@@ -150,7 +151,9 @@ class InMemoryLedger {
       { component_id: 4, rule_id: 2, metal_id: 2, percentage: 0.2000 },
       { component_id: 5, rule_id: 3, metal_id: 3, percentage: 1.0000 },
       { component_id: 6, rule_id: 4, metal_id: 3, percentage: 0.7000 },
-      { component_id: 7, rule_id: 4, metal_id: 2, percentage: 0.3000 }
+      { component_id: 7, rule_id: 4, metal_id: 2, percentage: 0.3000 },
+      { component_id: 8, rule_id: 5, metal_id: 3, percentage: 0.6000 },
+      { component_id: 9, rule_id: 5, metal_id: 2, percentage: 0.4000 }
     ];
 
     // Melting Sessions, Logs & Details
@@ -169,8 +172,8 @@ class InMemoryLedger {
 
     this.nextTransId = 12;
     this.nextMetalId = 7;
-    this.nextRuleId = 5;
-    this.nextComponentId = 8;
+    this.nextRuleId = 6;
+    this.nextComponentId = 10;
     this.nextSessionId = 2;
     this.nextMeltingId = 2;
     this.nextDetailId = 3;
@@ -441,6 +444,17 @@ async function initDatabase() {
       `);
     } catch (e) {
       // constraint update handled
+    }
+
+    // Ensure 'None' is allowed in melting_rules compute_parameter check constraint
+    try {
+      await pool.query(`
+        ALTER TABLE melting_rules ALTER COLUMN compute_parameter TYPE VARCHAR(10);
+        ALTER TABLE melting_rules DROP CONSTRAINT IF EXISTS melting_rules_compute_parameter_check;
+        ALTER TABLE melting_rules ADD CONSTRAINT melting_rules_compute_parameter_check CHECK (compute_parameter IN ('C', 'E', 'None'));
+      `);
+    } catch (e) {
+      // already altered or ignore
     }
 
     // Ensure Master Administrator exists and is synchronized with ADMIN_PASSWORD environment variable
@@ -1235,7 +1249,8 @@ app.post('/rules/create', requireAuth, requireRole('FactoryManager'), async (req
   if (!Array.isArray(component_metal_id)) component_metal_id = [component_metal_id];
   if (!Array.isArray(component_percentage)) component_percentage = [component_percentage];
 
-  if (!scenario_name || !target_purity || !compute_parameter || !compute_percentage) {
+  const isNone = compute_parameter === 'None';
+  if (!scenario_name || !target_purity || !compute_parameter || (!isNone && (compute_percentage === undefined || compute_percentage === ''))) {
     const metalsRes = await executeQuery('SELECT * FROM metal_master ORDER BY metal_name ASC');
     return res.render('rule_form', {
       mode: 'create',
@@ -1244,6 +1259,8 @@ app.post('/rules/create', requireAuth, requireRole('FactoryManager'), async (req
       error: 'Please fill in all required rule configuration fields.'
     });
   }
+
+  const finalPct = isNone ? 0 : parseFloat(compute_percentage || 0);
 
   try {
     if (isPostgresConnected && pool) {
@@ -1257,7 +1274,7 @@ app.post('/rules/create', requireAuth, requireRole('FactoryManager'), async (req
           scenario_name.trim(),
           parseFloat(target_purity),
           compute_parameter,
-          parseFloat(compute_percentage),
+          finalPct,
           parseFloat(purity_min || 0),
           parseFloat(purity_max || 100)
         ]);
@@ -1291,7 +1308,7 @@ app.post('/rules/create', requireAuth, requireRole('FactoryManager'), async (req
         scenario_name: scenario_name.trim(),
         target_purity: parseFloat(target_purity),
         compute_parameter,
-        compute_percentage: parseFloat(compute_percentage),
+        compute_percentage: finalPct,
         purity_min: parseFloat(purity_min || 0),
         purity_max: parseFloat(purity_max || 100),
         created_at: new Date()
@@ -1350,6 +1367,9 @@ app.post('/rules/edit/:id', requireAuth, requireRole('FactoryManager'), async (r
   if (!Array.isArray(component_metal_id)) component_metal_id = [component_metal_id];
   if (!Array.isArray(component_percentage)) component_percentage = [component_percentage];
 
+  const isNone = compute_parameter === 'None';
+  const finalPct = isNone ? 0 : parseFloat(compute_percentage || 0);
+
   try {
     if (isPostgresConnected && pool) {
       const client = await pool.connect();
@@ -1363,7 +1383,7 @@ app.post('/rules/edit/:id', requireAuth, requireRole('FactoryManager'), async (r
           scenario_name.trim(),
           parseFloat(target_purity),
           compute_parameter,
-          parseFloat(compute_percentage),
+          finalPct,
           parseFloat(purity_min || 0),
           parseFloat(purity_max || 100),
           ruleId
@@ -1399,7 +1419,7 @@ app.post('/rules/edit/:id', requireAuth, requireRole('FactoryManager'), async (r
           scenario_name: scenario_name.trim(),
           target_purity: parseFloat(target_purity),
           compute_parameter,
-          compute_percentage: parseFloat(compute_percentage),
+          compute_percentage: finalPct,
           purity_min: parseFloat(purity_min || 0),
           purity_max: parseFloat(purity_max || 100)
         };

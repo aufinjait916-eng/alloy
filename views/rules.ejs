@@ -116,17 +116,25 @@
                     <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-950 text-blue-300 border border-blue-800" title="Calculates Metal Weight E = C * percentage">
                       Calc E (Metal)
                     </span>
-                  <% } else { %>
+                  <% } else if (rule.compute_parameter === 'C') { %>
                     <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-950 text-purple-300 border border-purple-800" title="Calculates Pure Weight C = E * percentage">
                       Calc C (Pure)
+                    </span>
+                  <% } else { %>
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-amber-300 border border-amber-500/40" title="Direct conversion: calculates target weight and alloy directly from user-entered weight and purity">
+                      None (Direct)
                     </span>
                   <% } %>
                 </td>
 
                 <!-- Ratio Multiplier (%) -->
                 <td class="px-6 py-4 text-center text-slate-200 font-bold">
-                  <%= Number(rule.compute_percentage).toFixed(2) %>%
-                  <span class="text-[10px] text-slate-400 block font-mono font-normal">Ratio: <%= (Number(rule.compute_percentage) / 100).toFixed(4) %></span>
+                  <% if (rule.compute_parameter === 'None') { %>
+                    <span class="text-xs text-slate-500 font-mono font-normal">None</span>
+                  <% } else { %>
+                    <%= Number(rule.compute_percentage).toFixed(2) %>%
+                    <span class="text-[10px] text-slate-400 block font-mono font-normal">Ratio: <%= (Number(rule.compute_percentage) / 100).toFixed(4) %></span>
+                  <% } %>
                 </td>
 
                 <!-- Range -->

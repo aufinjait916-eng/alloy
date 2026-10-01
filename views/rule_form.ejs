@@ -110,28 +110,32 @@
               id="compute_parameter" 
               name="compute_parameter" 
               required 
+              onchange="onComputeVarChange()"
               class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
             >
-              <option value="E" <%= (mode === 'edit' && rule.compute_parameter === 'E') || mode === 'create' ? 'selected' : '' %>>
+              <option value="E" <%= (mode === 'edit' && rule.compute_parameter === 'E') || (mode === 'create') ? 'selected' : '' %>>
                 Calculate 'E' (Metal Weight = C &times; %)
               </option>
               <option value="C" <%= (mode === 'edit' && rule.compute_parameter === 'C') ? 'selected' : '' %>>
                 Calculate 'C' (Pure Weight = E &times; %)
               </option>
+              <option value="None" <%= (mode === 'edit' && rule.compute_parameter === 'None') ? 'selected' : '' %>>
+                None (Direct Weight &amp; Purity Conversion)
+              </option>
             </select>
-            <p class="text-[11px] text-slate-500 mt-1">Which variable is computed automatically</p>
+            <p id="computeVarHelp" class="text-[11px] text-slate-500 mt-1">Which variable is computed automatically</p>
           </div>
 
           <!-- Compute Percentage as Ratio Multiplier (%) -->
-          <div>
+          <div id="computePctContainer" class="transition">
             <label for="compute_percentage" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-              Ratio Multiplier (%) <span class="text-rose-400">*</span>
+              Ratio Multiplier (%) <span id="computePctRequired" class="text-rose-400">*</span>
             </label>
             <div class="relative">
               <input 
                 type="number" 
                 step="0.0001" 
-                min="0.0001" 
+                min="0.0000" 
                 id="compute_percentage" 
                 name="compute_percentage" 
                 required 
@@ -141,7 +145,7 @@
               />
               <span class="absolute inset-y-0 right-0 pr-4 flex items-center text-xs font-mono text-slate-500">%</span>
             </div>
-            <p class="text-[11px] text-slate-500 mt-1">Entered as percentage: e.g. enter 142.86 for 1.4286 ratio, or 25.00 for 0.25 ratio.</p>
+            <p id="computePctHelp" class="text-[11px] text-slate-500 mt-1">Entered as percentage: e.g. enter 142.86 for 1.4286 ratio, or 25.00 for 0.25 ratio.</p>
           </div>
         </div>
 
@@ -352,6 +356,33 @@
       return true;
     }
 
+    function onComputeVarChange() {
+      const sel = document.getElementById('compute_parameter').value;
+      const pctContainer = document.getElementById('computePctContainer');
+      const pctInput = document.getElementById('compute_percentage');
+      const pctHelp = document.getElementById('computePctHelp');
+      const pctRequired = document.getElementById('computePctRequired');
+      const varHelp = document.getElementById('computeVarHelp');
+
+      if (sel === 'None') {
+        pctInput.value = '0.00';
+        pctInput.required = false;
+        if (pctRequired) pctRequired.classList.add('hidden');
+        if (pctHelp) pctHelp.textContent = 'Not applicable for "None" variable. Computation will be evaluated directly on the weight and purity entered in crucible preparation.';
+        if (varHelp) varHelp.textContent = 'Direct conversion: Calculates target weight (G) and required alloy (H) directly from user-entered weight and purity';
+        pctContainer.classList.add('opacity-50');
+      } else {
+        if (pctInput.value === '0' || pctInput.value === '0.00' || !pctInput.value) {
+          pctInput.value = '100.00';
+        }
+        pctInput.required = true;
+        if (pctRequired) pctRequired.classList.remove('hidden');
+        if (pctHelp) pctHelp.textContent = 'Entered as percentage: e.g. enter 142.86 for 1.4286 ratio, or 25.00 for 0.25 ratio.';
+        if (varHelp) varHelp.textContent = 'Which variable is computed automatically';
+        pctContainer.classList.remove('opacity-50');
+      }
+    }
+
     // Populate initial rows
     document.addEventListener('DOMContentLoaded', function() {
       if (initialComponents && initialComponents.length > 0) {
@@ -364,6 +395,7 @@
         addComponentRow(2, '40.00');
       }
       recalcTotalSum();
+      onComputeVarChange();
     });
   </script>
 </body>

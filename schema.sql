@@ -95,7 +95,7 @@ CREATE TABLE melting_rules (
     rule_id SERIAL PRIMARY KEY,
     scenario_name VARCHAR(100) NOT NULL,
     target_purity NUMERIC(5,2) NOT NULL,
-    compute_parameter VARCHAR(1) NOT NULL CHECK (compute_parameter IN ('C', 'E')),
+    compute_parameter VARCHAR(10) NOT NULL CHECK (compute_parameter IN ('C', 'E', 'None')),
     compute_percentage NUMERIC(8,4) NOT NULL,
     purity_min NUMERIC(5,2) NOT NULL,
     purity_max NUMERIC(5,2) NOT NULL,
@@ -200,9 +200,10 @@ INSERT INTO melting_rules (rule_id, scenario_name, target_purity, compute_parame
 (1, '18K Yellow Gold Ingot Melt', 75.00, 'E', 25.0000, 50.00, 80.00),
 (2, '14K Rose Gold Crucible Run', 58.50, 'E', 35.0000, 45.00, 70.00),
 (3, '925 Sterling Silver Casting Bar', 92.50, 'C', 50.0000, 99.00, 99.99),
-(4, '14K Custom Crown Gold (142.86%)', 58.50, 'E', 142.8600, 40.00, 75.00);
+(4, '14K Custom Crown Gold (142.86%)', 58.50, 'E', 142.8600, 40.00, 75.00),
+(5, '18K Direct Scrap Conversion (None)', 75.00, 'None', 0.0000, 75.00, 99.90);
 
-SELECT setval('melting_rules_rule_id_seq', 4);
+SELECT setval('melting_rules_rule_id_seq', 5);
 
 -- Components for Rule 1 (18K: 60% Copper + 40% Silver)
 INSERT INTO rule_components (rule_id, metal_id, percentage) VALUES
@@ -222,6 +223,11 @@ INSERT INTO rule_components (rule_id, metal_id, percentage) VALUES
 INSERT INTO rule_components (rule_id, metal_id, percentage) VALUES
 (4, 3, 0.7000), -- Electrolytic Copper 70%
 (4, 2, 0.3000); -- Fine Silver 30%
+
+-- Components for Rule 5 (18K Direct: 60% Copper + 40% Silver)
+INSERT INTO rule_components (rule_id, metal_id, percentage) VALUES
+(5, 3, 0.6000), -- Electrolytic Copper 60%
+(5, 2, 0.4000); -- Fine Silver 40%
 
 -- Initial Melting Session Seed (Session #1)
 INSERT INTO melting_sessions (session_id, session_date, total_session_weight_g, total_session_alloy_h) VALUES
