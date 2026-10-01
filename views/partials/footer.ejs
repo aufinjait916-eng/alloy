@@ -1,0 +1,33 @@
+<footer class="border-t border-slate-800/80 bg-slate-900/60 mt-12 py-6 text-slate-500 text-xs">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full <%= (typeof isPostgresConnected !== 'undefined' && isPostgresConnected) ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400' %>"></span>
+      <span class="text-slate-400">Database Engine:</span>
+      <span class="<%= (typeof isPostgresConnected !== 'undefined' && isPostgresConnected) ? 'text-emerald-400 font-bold' : 'text-amber-300 font-medium' %>">
+        <%= (typeof isPostgresConnected !== 'undefined' && isPostgresConnected) ? 'PostgreSQL (Connected)' : 'In-Memory Fallback (PostgreSQL Ready)' %>
+      </span>
+    </div>
+    <div class="flex items-center gap-4 text-slate-400">
+      <span>Alloy Inventory System</span>
+      <span class="text-slate-600">&bull;</span>
+      <span>TrueNAS SCALE Environment Compatible</span>
+    </div>
+  </div>
+
+  <!-- Universal Form Auth Interceptor -->
+  <script>
+    (function() {
+      document.addEventListener('submit', function(e) {
+        const form = e.target;
+        const activeToken = sessionStorage.getItem('alloy_auth_token') || '<%= typeof authToken !== "undefined" ? authToken : "" %>';
+        if (activeToken && form.action && !form.action.includes('auth=') && !form.querySelector('input[name="auth"]')) {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = 'auth';
+          input.value = activeToken;
+          form.appendChild(input);
+        }
+      }, true);
+    })();
+  </script>
+</footer>

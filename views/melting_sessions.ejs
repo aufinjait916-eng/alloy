@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Melting Session Logs - Alloy &amp; Melting Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+  <%- include('partials/navbar') %>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Page Header & Action -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Crucible Melting Sessions</h1>
+          <span class="text-xs font-mono bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700">
+            <%= sessions.length %> executed sessions
+          </span>
+        </div>
+        <p class="text-sm text-slate-400 mt-1">
+          Historical log of furnace melt sessions, charge batches, and alloy metal deductions.
+        </p>
+      </div>
+
+      <% if (currentUser.role === 'FactoryManager') { %>
+        <div class="flex items-center gap-3">
+          <a 
+            href="<%= authUrl('/melting/prepare') %>" 
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95 transition"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Prepare New Melting Run</span>
+          </a>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Alert / Toast Messages -->
+    <% if (typeof query !== 'undefined' && query.msg) { %>
+      <div class="mb-6 p-4 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 text-sm flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-5 h-5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>
+            <% if (query.msg === 'session_executed') { %> Melting session executed successfully! Batch records logged and inventory deductions committed. <% } %>
+            <% if (query.msg === 'session_deleted') { %> Melting session deleted successfully! Deducted alloy metals have been restored back into vault inventory. <% } %>
+          </span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-emerald-400 hover:text-emerald-200 text-xs font-mono">Dismiss</button>
+      </div>
+    <% } %>
+
+    <!-- Sessions Table -->
+    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-950/90 text-xs uppercase font-mono text-slate-400 border-b border-slate-800">
+            <tr>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Session ID</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Execution Timestamp</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-center">Batch Count</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-right">Total Net Weight (G)</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-right">Total Required Alloy (H)</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 font-mono text-xs">
+            <% if (sessions.length === 0) { %>
+              <tr>
+                <td colspan="6" class="px-6 py-12 text-center text-slate-500 font-sans text-sm">
+                  No melting sessions executed yet.
+                </td>
+              </tr>
+            <% } %>
+
+            <% sessions.forEach(s => { %>
+              <tr class="hover:bg-slate-800/40 transition">
+                <td class="px-6 py-4 font-bold text-amber-400">
+                  #SESSION-<%= s.session_id %>
+                </td>
+
+                <td class="px-6 py-4 text-slate-400 whitespace-nowrap">
+                  <%= new Date(s.session_date).toLocaleString('en-US', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) %>
+                </td>
+
+                <td class="px-6 py-4 text-center font-sans">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-950 border border-slate-800 text-slate-300">
+                    <%= s.batch_count || 1 %> charges
+                  </span>
+                </td>
+
+                <td class="px-6 py-4 text-right font-bold text-white">
+                  <%= Number(s.total_session_weight_g).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) %> g
+                </td>
+
+                <td class="px-6 py-4 text-right font-bold text-amber-400">
+                  <%= Number(s.total_session_alloy_h).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) %> g
+                </td>
+
+                <td class="px-6 py-4 text-right font-sans whitespace-nowrap">
+                  <div class="inline-flex items-center justify-end gap-2">
+                    <a 
+                      href="<%= authUrl('/melting/sessions/' + s.session_id) %>" 
+                      class="text-xs font-semibold text-amber-400 hover:text-amber-300 bg-slate-950 px-3 py-1.5 rounded-lg border border-amber-500/40 hover:border-amber-400 transition"
+                    >
+                      View Details &rarr;
+                    </a>
+                    <% if (currentUser && currentUser.role === 'FactoryManager') { %>
+                      <button 
+                        type="button" 
+                        onclick="openDeleteSessionModal('<%= s.session_id %>', '<%= Number(s.total_session_weight_g).toFixed(3) %>', '<%= Number(s.total_session_alloy_h).toFixed(3) %>')"
+                        class="text-xs font-semibold text-rose-400 hover:text-rose-300 bg-slate-950 hover:bg-rose-950/40 px-2.5 py-1.5 rounded-lg border border-slate-700 hover:border-rose-500/50 transition cursor-pointer"
+                        title="Delete session and restore metal inventory"
+                      >
+                        Delete
+                      </button>
+                    <% } %>
+                  </div>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <%- include('partials/footer') %>
+
+  <!-- Delete Session Confirmation Modal -->
+  <div id="deleteSessionModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+      <div class="flex items-center gap-3 text-rose-400 mb-4">
+        <div class="p-2 rounded-lg bg-rose-950 border border-rose-900">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <h3 class="text-base font-bold text-white">Delete Melting Session</h3>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed mb-4">
+        Are you sure you want to delete <strong class="text-amber-400 font-mono" id="modalSessionLabel">#SESSION</strong>?
+      </p>
+
+      <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 text-xs font-mono mb-4 space-y-1.5">
+        <div class="flex justify-between text-slate-400">
+          <span>Total Target Weight:</span>
+          <span class="text-white font-bold" id="modalSessionWeight">0.000 g</span>
+        </div>
+        <div class="flex justify-between text-slate-400">
+          <span>Required Alloy Issued:</span>
+          <span class="text-amber-400 font-bold" id="modalSessionAlloy">0.000 g</span>
+        </div>
+        <div class="pt-2 border-t border-slate-800 text-[11px] text-emerald-400 flex items-center gap-1.5 font-sans">
+          <span>✓</span>
+          <span>All deducted alloy metals will be <strong>restored back to vault inventory</strong>.</span>
+        </div>
+      </div>
+
+      <form id="deleteSessionForm" method="POST" action="">
+        <input type="hidden" name="auth" value="<%= authToken %>">
+        <input type="hidden" name="session_id" id="modalFormSessionId" value="">
+        <div class="flex items-center justify-end gap-3">
+          <button 
+            type="button" 
+            onclick="closeDeleteSessionModal()"
+            class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit" 
+            class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-900/30 transition cursor-pointer"
+          >
+            Confirm Delete &amp; Restore
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function openDeleteSessionModal(id, weight, alloy) {
+      document.getElementById('modalSessionLabel').textContent = '#SESSION-' + id;
+      document.getElementById('modalSessionWeight').textContent = weight + ' g';
+      document.getElementById('modalSessionAlloy').textContent = alloy + ' g';
+      document.getElementById('modalFormSessionId').value = id;
+      
+      const form = document.getElementById('deleteSessionForm');
+      const token = sessionStorage.getItem('alloy_auth_token') || '<%= typeof authToken !== "undefined" ? authToken : "" %>';
+      form.action = '/melting/sessions/delete/' + id + (token ? ('?auth=' + encodeURIComponent(token)) : '');
+      
+      let authInput = form.querySelector('input[name="auth"]');
+      if (authInput && token) authInput.value = token;
+
+      document.getElementById('deleteSessionModal').classList.remove('hidden');
+    }
+
+    function closeDeleteSessionModal() {
+      document.getElementById('deleteSessionModal').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>

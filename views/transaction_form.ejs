@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= mode === 'add' ? 'Record Transaction' : 'Edit Transaction #' + transaction.transaction_id %> - Alloy &amp; Melting Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+  <%- include('partials/navbar') %>
+
+  <main class="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Breadcrumb / Header -->
+    <div class="mb-6">
+      <a href="<%= authUrl('/transactions') %>" class="text-xs font-mono text-slate-400 hover:text-amber-400 flex items-center gap-1.5 mb-2 transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        <span>Back to Transaction History</span>
+      </a>
+
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-white tracking-tight">
+            <%= mode === 'add' ? 'Record Inventory Movement' : 'Modify Transaction #' + transaction.transaction_id %>
+          </h1>
+          <p class="text-xs text-slate-400 mt-1">
+            <%= mode === 'add' ? 'Post a new bullion receipt, scrap intake, or furnace crucible melt.' : 'Adjust historical transaction parameters and update ledger.' %>
+          </p>
+        </div>
+        <span class="text-xs font-mono bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-1 rounded-full">
+          FactoryManager
+        </span>
+      </div>
+    </div>
+
+    <!-- Error Alert -->
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="mb-6 p-4 rounded-xl bg-rose-950/80 border border-rose-800/80 text-rose-300 text-sm flex items-start gap-3">
+        <svg class="w-5 h-5 text-rose-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+          <strong class="font-semibold">Validation Error:</strong>
+          <p class="mt-0.5"><%= error %></p>
+        </div>
+      </div>
+    <% } %>
+
+    <!-- Transaction Form Card -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
+      <form 
+        action="<%= authUrl(mode === 'add' ? '/transactions/add' : '/transactions/edit/' + transaction.transaction_id) %>" 
+        method="POST" 
+        id="transForm"
+        class="space-y-6"
+      >
+        <input type="hidden" name="auth" value="<%= authToken %>">
+        <!-- Metal Selection -->
+        <div>
+          <label for="metal_id" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+            Target Metal / Alloy Specification <span class="text-rose-400">*</span>
+          </label>
+          <select 
+            id="metal_id" 
+            name="metal_id" 
+            required 
+            onchange="updateCalculations()"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+          >
+            <option value="" disabled <%= mode === 'add' && !selectedMetalId ? 'selected' : '' %>>-- Select Metal from Catalog --</option>
+            <% metals.forEach(m => { %>
+              <% 
+                const isSelected = (mode === 'edit' && transaction.metal_id === m.metal_id) || (mode === 'add' && selectedMetalId == m.metal_id);
+                const currentBal = Number(stocksMap[m.metal_id] || 0);
+              %>
+              <option 
+                value="<%= m.metal_id %>" 
+                data-balance="<%= currentBal %>"
+                data-uom="<%= m.uom || 'g' %>"
+                <%= isSelected ? 'selected' : '' %>
+              >
+                <%= m.metal_name %> (<%= m.purity_grade %>) &bull; Balance: <%= currentBal.toFixed(3) %> <%= m.uom || 'g' %>
+              </option>
+            <% }); %>
+          </select>
+        </div>
+
+        <!-- Movement Type (IN vs OUT) -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+            Movement Type <span class="text-rose-400">*</span>
+          </label>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <!-- IN Option -->
+            <label class="relative flex items-center p-4 rounded-xl border cursor-pointer transition bg-slate-950 hover:bg-slate-800/60 border-slate-800 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-950/20">
+              <input 
+                type="radio" 
+                name="transaction_type" 
+                value="IN" 
+                required 
+                onchange="updateCalculations()"
+                <%= (mode === 'edit' ? transaction.transaction_type === 'IN' : true) ? 'checked' : '' %>
+                class="w-4 h-4 text-emerald-500 border-slate-700 focus:ring-emerald-500"
+              />
+              <div class="ml-3">
+                <div class="text-sm font-bold text-white flex items-center gap-1.5">
+                  <span class="text-emerald-400">&darr;</span>
+                  <span>IN (Stock Deposit)</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Bullion intake, scrap return, refinery supply</div>
+              </div>
+            </label>
+
+            <!-- OUT Option -->
+            <label class="relative flex items-center p-4 rounded-xl border cursor-pointer transition bg-slate-950 hover:bg-slate-800/60 border-slate-800 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-950/20">
+              <input 
+                type="radio" 
+                name="transaction_type" 
+                value="OUT" 
+                required 
+                onchange="updateCalculations()"
+                <%= (mode === 'edit' && transaction.transaction_type === 'OUT') ? 'checked' : '' %>
+                class="w-4 h-4 text-amber-500 border-slate-700 focus:ring-amber-500"
+              />
+              <div class="ml-3">
+                <div class="text-sm font-bold text-white flex items-center gap-1.5">
+                  <span class="text-amber-400">&uarr;</span>
+                  <span>OUT (Melting / Dispatch)</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Crucible charge, furnace cast, outward transfer</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Quantity & Date Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Quantity -->
+          <div>
+            <label for="quantity" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+              Weight Quantity (<span id="uomLabel">g</span>) <span class="text-rose-400">*</span>
+            </label>
+            <div class="relative">
+              <input 
+                type="number" 
+                step="0.001" 
+                min="0.001" 
+                id="quantity" 
+                name="quantity" 
+                required 
+                oninput="updateCalculations()"
+                value="<%= mode === 'edit' ? Number(transaction.quantity).toFixed(3) : '' %>"
+                placeholder="0.000" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+              />
+              <span class="absolute inset-y-0 right-0 pr-4 flex items-center text-xs font-mono text-slate-500 pointer-events-none" id="qtySuffix">
+                g
+              </span>
+            </div>
+          </div>
+
+          <!-- Transaction Date -->
+          <div>
+            <label for="trans_date" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+              Transaction Timestamp
+            </label>
+            <% 
+              let dateVal = '';
+              if (mode === 'edit' && transaction.trans_date) {
+                const d = new Date(transaction.trans_date);
+                dateVal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+              } else {
+                const now = new Date();
+                dateVal = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+              }
+            %>
+            <input 
+              type="datetime-local" 
+              id="trans_date" 
+              name="trans_date" 
+              value="<%= dateVal %>"
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+            />
+          </div>
+        </div>
+
+        <!-- Entity / Remarks -->
+        <div>
+          <label for="entity_name" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+            Entity / Process Remarks <span class="text-rose-400">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="entity_name" 
+            name="entity_name" 
+            required 
+            maxlength="150"
+            value="<%= mode === 'edit' ? transaction.entity_name : '' %>"
+            placeholder="e.g. Furnace #2 Charge - Batch #F26, Refinery Ingot Consignment #99" 
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+          />
+          <p class="text-[11px] text-slate-500 mt-1">This identifier is indexed and real-time searchable in the transaction logs.</p>
+        </div>
+
+        <!-- DYNAMIC STOCK IMPACT LIVE PREVIEW CARD (Required Feature) -->
+        <div id="stockPreviewCard" class="bg-slate-950 rounded-xl p-4 border border-slate-800 transition">
+          <div class="text-xs font-mono flex items-center justify-between text-slate-400 mb-2">
+            <span>REAL-TIME STOCK IMPACT CALCULATOR</span>
+            <span id="previewStatusBadge" class="text-[10px] px-2 py-0.5 rounded font-bold bg-slate-800 text-slate-300">Awaiting inputs</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 text-xs font-mono pt-1">
+            <div>
+              <span class="text-slate-500">Current Vault Balance:</span>
+              <div id="lblCurrentBalance" class="text-sm font-bold text-white mt-0.5">-</div>
+            </div>
+            <div>
+              <span class="text-slate-500">Projected Balance After Transaction:</span>
+              <div id="lblProjectedBalance" class="text-sm font-bold text-amber-400 mt-0.5">-</div>
+            </div>
+          </div>
+
+          <div id="insufficientStockWarning" class="hidden mt-3 p-3 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs flex items-start gap-2">
+            <span class="text-base shrink-0">⚠️</span>
+            <div>
+              <strong class="font-bold">INSUFFICIENT STOCK WARNING:</strong>
+              <p class="mt-0.5">The entered withdrawal quantity exceeds available stock in the vault! Submitting this will lead to a negative balance.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+          <a 
+            href="<%= authUrl('/transactions') %>" 
+            class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition"
+          >
+            Cancel
+          </a>
+          <button 
+            type="submit" 
+            id="submitBtn"
+            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-sm font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition"
+          >
+            <%= mode === 'add' ? 'Commit Transaction' : 'Save Modifications' %>
+          </button>
+        </div>
+
+      </form>
+    </div>
+
+  </main>
+
+  <%- include('partials/footer') %>
+
+  <script>
+    const mode = '<%= mode %>';
+    const originalQty = <%= mode === 'edit' ? Number(transaction.quantity) : 0 %>;
+    const originalType = '<%= mode === 'edit' ? transaction.transaction_type : '' %>';
+    const originalMetalId = <%= mode === 'edit' ? transaction.metal_id : 0 %>;
+
+    function getSelectedType() {
+      const checked = document.querySelector('input[name="transaction_type"]:checked');
+      return checked ? checked.value : 'IN';
+    }
+
+    function updateCalculations() {
+      const metalSelect = document.getElementById('metal_id');
+      const selectedOption = metalSelect.options[metalSelect.selectedIndex];
+      const qtyInput = document.getElementById('quantity');
+      const qty = parseFloat(qtyInput.value) || 0;
+      const type = getSelectedType();
+
+      const lblCurrent = document.getElementById('lblCurrentBalance');
+      const lblProjected = document.getElementById('lblProjectedBalance');
+      const badge = document.getElementById('previewStatusBadge');
+      const warningBox = document.getElementById('insufficientStockWarning');
+      const uomLabel = document.getElementById('uomLabel');
+      const qtySuffix = document.getElementById('qtySuffix');
+
+      if (!selectedOption || !selectedOption.value) {
+        lblCurrent.textContent = '-';
+        lblProjected.textContent = '-';
+        badge.textContent = 'Select Metal';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded font-bold bg-slate-800 text-slate-400';
+        warningBox.classList.add('hidden');
+        return;
+      }
+
+      const uom = selectedOption.getAttribute('data-uom') || 'g';
+      uomLabel.textContent = uom;
+      qtySuffix.textContent = uom;
+
+      let currentBal = parseFloat(selectedOption.getAttribute('data-balance')) || 0;
+      
+      // In edit mode: if this is the same metal, currentBal includes the original transaction effect!
+      // To get the baseline without the original transaction:
+      let baseBal = currentBal;
+      if (mode === 'edit' && parseInt(selectedOption.value) === originalMetalId) {
+        if (originalType === 'IN') {
+          baseBal = currentBal - originalQty;
+        } else if (originalType === 'OUT') {
+          baseBal = currentBal + originalQty;
+        }
+      }
+
+      lblCurrent.textContent = currentBal.toFixed(3) + ' ' + uom;
+
+      let projectedBal = baseBal;
+      if (type === 'IN') {
+        projectedBal = baseBal + qty;
+      } else {
+        projectedBal = baseBal - qty;
+      }
+
+      lblProjected.textContent = projectedBal.toFixed(3) + ' ' + uom;
+
+      if (type === 'OUT' && projectedBal < 0) {
+        lblProjected.className = 'text-sm font-bold text-rose-400 mt-0.5';
+        badge.textContent = 'Negative Vault Deficit';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded font-bold bg-rose-950 text-rose-300 border border-rose-800';
+        warningBox.classList.remove('hidden');
+      } else if (type === 'OUT') {
+        lblProjected.className = 'text-sm font-bold text-amber-400 mt-0.5';
+        badge.textContent = 'Melt Deduction';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded font-bold bg-amber-950 text-amber-300 border border-amber-800';
+        warningBox.classList.add('hidden');
+      } else {
+        lblProjected.className = 'text-sm font-bold text-emerald-400 mt-0.5';
+        badge.textContent = 'Vault Inflow (+)';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300 border border-emerald-800';
+        warningBox.classList.add('hidden');
+      }
+    }
+
+    // Run on page load
+    document.addEventListener('DOMContentLoaded', updateCalculations);
+  </script>
+</body>
+</html>

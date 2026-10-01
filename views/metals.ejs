@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metal Master Catalog - Alloy &amp; Melting Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+  <%- include('partials/navbar') %>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Metal Master Specifications</h1>
+          <span class="text-xs font-mono bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-1 rounded-full">
+            FactoryManager Access
+          </span>
+        </div>
+        <p class="text-sm text-slate-400 mt-1">
+          Catalog of precious metals, master alloys, purity standards, and tracking units of measure.
+        </p>
+      </div>
+
+      <button 
+        type="button" 
+        onclick="toggleAddForm()"
+        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95 transition"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+        </svg>
+        <span id="toggleBtnText">Add Metal Specification</span>
+      </button>
+    </div>
+
+    <!-- Alert / Toast Messages -->
+    <% if (typeof query !== 'undefined' && query.msg) { %>
+      <div class="mb-6 p-4 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 text-sm flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-5 h-5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>
+            <% if (query.msg === 'metal_added') { %> Metal specification successfully added to catalog. <% } %>
+            <% if (query.msg === 'metal_updated') { %> Metal specification updated successfully. <% } %>
+          </span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-emerald-400 hover:text-emerald-200 text-xs font-mono">Dismiss</button>
+      </div>
+    <% } %>
+
+    <!-- Add Metal Specification Form (Expandable) -->
+    <div id="addMetalCard" class="hidden mb-8 bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-5">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span class="text-amber-400">✨</span> Add New Metal Specification to Catalog
+        </h3>
+        <button type="button" onclick="toggleAddForm()" class="text-slate-400 hover:text-white text-xs">Close</button>
+      </div>
+
+      <form action="<%= authUrl('/metals/add') %>" method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <input type="hidden" name="auth" value="<%= authToken %>">
+        <div>
+          <label for="metal_name" class="block text-xs font-medium text-slate-300 uppercase tracking-wider mb-1">Metal / Alloy Name</label>
+          <input 
+            type="text" 
+            id="metal_name" 
+            name="metal_name" 
+            required 
+            placeholder="e.g. Rose Gold 14K" 
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500 transition"
+          />
+        </div>
+
+        <div>
+          <label for="purity_grade" class="block text-xs font-medium text-slate-300 uppercase tracking-wider mb-1">Purity Grade</label>
+          <input 
+            type="text" 
+            id="purity_grade" 
+            name="purity_grade" 
+            required 
+            placeholder="e.g. 58.5% Au, Cu/Ag" 
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500 transition"
+          />
+        </div>
+
+        <div>
+          <label for="uom" class="block text-xs font-medium text-slate-300 uppercase tracking-wider mb-1">Unit of Measure (UOM)</label>
+          <select 
+            id="uom" 
+            name="uom" 
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500 transition"
+          >
+            <option value="g" selected>Grams (g)</option>
+            <option value="kg">Kilograms (kg)</option>
+            <option value="oz">Troy Ounces (oz)</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+            <input type="checkbox" name="track_inventory" value="true" checked class="w-4 h-4 text-amber-500 rounded border-slate-700 focus:ring-amber-500">
+            <span>Track Stock</span>
+          </label>
+
+          <button 
+            type="submit" 
+            class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2 px-4 rounded-lg text-sm transition"
+          >
+            Save Metal
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Metals Catalog Table -->
+    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-950/90 text-xs uppercase font-mono text-slate-400 border-b border-slate-800">
+            <tr>
+              <th scope="col" class="px-6 py-3.5 font-semibold">ID</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Metal / Alloy Name</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Purity Specification</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Unit (UOM)</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Tracking Status</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-right">Current Vault Stock</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 font-mono text-xs">
+            <% metals.forEach(m => { %>
+              <% 
+                const stock = stocksMap[m.metal_id] || 0;
+              %>
+              <tr class="hover:bg-slate-800/40 transition">
+                <td class="px-6 py-4 text-slate-400">#<%= m.metal_id %></td>
+                <td class="px-6 py-4 font-sans font-medium text-white">
+                  <%= m.metal_name %>
+                </td>
+                <td class="px-6 py-4 text-slate-300">
+                  <span class="bg-slate-800 px-2.5 py-1 rounded border border-slate-700 text-slate-200">
+                    <%= m.purity_grade %>
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-slate-400 uppercase">
+                  <%= m.uom || 'g' %>
+                </td>
+                <td class="px-6 py-4 font-sans">
+                  <% if (m.track_inventory) { %>
+                    <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Active Tracked
+                    </span>
+                  <% } else { %>
+                    <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-600"></span> Untracked
+                    </span>
+                  <% } %>
+                </td>
+                <td class="px-6 py-4 text-right">
+                  <span class="font-bold text-sm <%= stock <= 0 ? 'text-rose-400' : 'text-emerald-400' %>">
+                    <%= Number(stock).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) %> <%= m.uom || 'g' %>
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-right font-sans">
+                  <a 
+                    href="<%= authUrl('/transactions/add?metal_id=' + m.metal_id) %>"
+                    class="text-xs text-amber-400 hover:text-amber-300 bg-slate-950 px-2.5 py-1 rounded border border-amber-500/40 transition"
+                  >
+                    + Movement
+                  </a>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <%- include('partials/footer') %>
+
+  <script>
+    function toggleAddForm() {
+      const card = document.getElementById('addMetalCard');
+      const btnText = document.getElementById('toggleBtnText');
+      if (card.classList.contains('hidden')) {
+        card.classList.remove('hidden');
+        btnText.textContent = 'Hide Form';
+        document.getElementById('metal_name').focus();
+      } else {
+        card.classList.add('hidden');
+        btnText.textContent = 'Add Metal Specification';
+      }
+    }
+  </script>
+</body>
+</html>

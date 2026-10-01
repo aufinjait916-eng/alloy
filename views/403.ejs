@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>403 Forbidden - Alloy & Melting Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+  <%- include('partials/navbar') %>
+
+  <main class="flex-1 max-w-2xl mx-auto px-4 py-16 flex flex-col items-center justify-center text-center">
+    <div class="w-16 h-16 rounded-2xl bg-rose-950/80 border border-rose-800 text-rose-400 flex items-center justify-center text-2xl font-bold mb-6 shadow-xl shadow-rose-950/50">
+      🚫
+    </div>
+    
+    <span class="text-xs uppercase font-mono tracking-widest text-rose-400 bg-rose-950/60 border border-rose-800/60 px-3 py-1 rounded-full mb-3">
+      HTTP 403 &bull; Access Denied
+    </span>
+
+    <h1 class="text-3xl font-bold text-white mb-2">Role Permissions Insufficient</h1>
+    <p class="text-slate-400 text-sm max-w-md mb-8">
+      Your current role (<strong class="text-emerald-400"><%= currentUser ? currentUser.role : 'Guest' %></strong>) has read-only privileges. 
+      Only users with the <strong class="text-amber-400">FactoryManager</strong> role are authorized to create, modify, or delete inventory transactions and metal master records.
+    </p>
+
+    <div class="flex items-center gap-3">
+      <a 
+        href="/dashboard" 
+        class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium border border-slate-700 transition"
+      >
+        Return to Dashboard
+      </a>
+      <a 
+        href="/transactions" 
+        class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-sm font-semibold transition"
+      >
+        View Transaction History
+      </a>
+    </div>
+  </main>
+
+  <%- include('partials/footer') %>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Melting Rules - Alloy &amp; Melting Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+  <%- include('partials/navbar') %>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Page Header & Action -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Melting Metallurgical Rules</h1>
+          <span class="text-xs font-mono bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-1 rounded-full">
+            FactoryManager Access
+          </span>
+        </div>
+        <p class="text-sm text-slate-400 mt-1">
+          Configured metallurgical target purities, compute parameters, and required alloy breakdown percentages.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <a 
+          href="<%= authUrl('/rules/create') %>" 
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95 transition"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+          </svg>
+          <span>Create Melting Rule</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Alert / Toast Messages -->
+    <% if (typeof query !== 'undefined' && query.msg) { %>
+      <div class="mb-6 p-4 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 text-sm flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-5 h-5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>
+            <% if (query.msg === 'rule_created') { %> New melting scenario configured successfully. <% } %>
+            <% if (query.msg === 'rule_updated') { %> Melting rule specifications updated successfully. <% } %>
+            <% if (query.msg === 'rule_deleted') { %> Melting rule and its component proportions deleted. <% } %>
+          </span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-emerald-400 hover:text-emerald-200 text-xs font-mono">Dismiss</button>
+      </div>
+    <% } %>
+
+    <!-- Rules Table -->
+    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-950/90 text-xs uppercase font-mono text-slate-400 border-b border-slate-800">
+            <tr>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Rule ID</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Scenario Name</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-center">Target Purity</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-center">Compute Parameter</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-center">Ratio Multiplier (%)</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-center">Validation Range</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Alloy Component Breakdown</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 font-mono text-xs">
+            <% if (rules.length === 0) { %>
+              <tr>
+                <td colspan="8" class="px-6 py-12 text-center text-slate-500 font-sans text-sm">
+                  No melting rules defined. Click "Create Melting Rule" to configure your first scenario.
+                </td>
+              </tr>
+            <% } %>
+
+            <% rules.forEach(rule => { %>
+              <tr class="hover:bg-slate-800/40 transition">
+                <!-- Rule ID -->
+                <td class="px-6 py-4 text-slate-400">#<%= rule.rule_id %></td>
+
+                <!-- Scenario Name -->
+                <td class="px-6 py-4 font-sans font-medium text-white">
+                  <div class="text-sm font-semibold"><%= rule.scenario_name %></div>
+                  <div class="text-[11px] text-slate-400">Created: <%= new Date(rule.created_at || Date.now()).toLocaleDateString() %></div>
+                </td>
+
+                <!-- Target Purity -->
+                <td class="px-6 py-4 text-center">
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-950 text-amber-300 border border-amber-800">
+                    <%= Number(rule.target_purity).toFixed(2) %>%
+                  </span>
+                </td>
+
+                <!-- Compute Parameter -->
+                <td class="px-6 py-4 text-center font-sans">
+                  <% if (rule.compute_parameter === 'E') { %>
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-950 text-blue-300 border border-blue-800" title="Calculates Metal Weight E = C * percentage">
+                      Calc E (Metal)
+                    </span>
+                  <% } else { %>
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-950 text-purple-300 border border-purple-800" title="Calculates Pure Weight C = E * percentage">
+                      Calc C (Pure)
+                    </span>
+                  <% } %>
+                </td>
+
+                <!-- Ratio Multiplier (%) -->
+                <td class="px-6 py-4 text-center text-slate-200 font-bold">
+                  <%= Number(rule.compute_percentage).toFixed(2) %>%
+                  <span class="text-[10px] text-slate-400 block font-mono font-normal">Ratio: <%= (Number(rule.compute_percentage) / 100).toFixed(4) %></span>
+                </td>
+
+                <!-- Range -->
+                <td class="px-6 py-4 text-center text-slate-300">
+                  <span class="bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                    <%= Number(rule.purity_min).toFixed(1) %>% - <%= Number(rule.purity_max).toFixed(1) %>%
+                  </span>
+                </td>
+
+                <!-- Alloy Component Breakdown -->
+                <td class="px-6 py-4 font-sans">
+                  <div class="flex flex-wrap gap-1.5">
+                    <% if (rule.components && rule.components.length > 0) { %>
+                      <% rule.components.forEach(c => { %>
+                        <span class="inline-flex items-center gap-1 text-[11px] bg-slate-950 border border-slate-700 px-2 py-0.5 rounded-md text-slate-300">
+                          <span class="font-medium text-white"><%= c.metal_name %>:</span>
+                          <strong class="text-amber-400 font-mono"><%= (Number(c.percentage) * 100).toFixed(1) %>%</strong>
+                        </span>
+                      <% }); %>
+                    <% } else { %>
+                      <span class="text-slate-500 text-xs italic">No components defined</span>
+                    <% } %>
+                  </div>
+                </td>
+
+                <!-- Actions -->
+                <td class="px-6 py-4 text-right font-sans whitespace-nowrap">
+                  <div class="inline-flex items-center gap-2">
+                    <a 
+                      href="<%= authUrl('/rules/edit/' + rule.rule_id) %>"
+                      class="text-xs text-slate-300 hover:text-amber-400 bg-slate-950 hover:bg-slate-800 px-2.5 py-1.5 rounded border border-slate-700 hover:border-amber-500/50 transition"
+                    >
+                      Edit
+                    </a>
+
+                    <form action="<%= authUrl('/rules/delete/' + rule.rule_id) %>" method="POST" class="inline" onsubmit="return confirm('Delete melting rule: <%= rule.scenario_name %>?');">
+                      <input type="hidden" name="auth" value="<%= authToken %>">
+                      <button 
+                        type="submit" 
+                        class="text-xs text-rose-400 hover:text-rose-300 bg-slate-950 hover:bg-rose-950/40 px-2.5 py-1.5 rounded border border-slate-700 hover:border-rose-500/50 transition"
+                      >
+                        Delete
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <%- include('partials/footer') %>
+</body>
+</html>

@@ -1,0 +1,65 @@
+# =======================================================================
+# Docker Compose for Alloy Inventory & Melting Management System
+# Ready for TrueNAS SCALE (Custom App / Docker Compose) & Linux servers
+# =======================================================================
+
+version: '3.8'
+
+services:
+  # -------------------------------------------------------------------
+  # Application Service (Pure Express + EJS Zero-Build Node.js App)
+  # -------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alloy_inventory_app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://${POSTGRES_USER:-alloy_user}:${POSTGRES_PASSWORD:-alloy_vault_secret_2026}@postgres:5432/${POSTGRES_DB:-alloy_db}
+      - SESSION_SECRET=${SESSION_SECRET:-c8f18d7b3a92e44f128bc170d65b32e01f6874e0d49f9c73e89a5cb19e273f04}
+      - TZ=UTC
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - alloy_network
+
+  # -------------------------------------------------------------------
+  # Database Service (PostgreSQL 16 with persistent TrueNAS dataset)
+  # -------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: alloy_inventory_db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-alloy_db}
+      - POSTGRES_USER=${POSTGRES_USER:-alloy_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-alloy_vault_secret_2026}
+      - TZ=UTC
+    volumes:
+      # TrueNAS SCALE: Map to persistent host dataset (e.g. /mnt/tank/apps/alloy_inventory/db)
+      - postgres_data:/var/lib/postgresql/data
+      # Automatically initializes schema, tables, views, and seeds on first container launch
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alloy_user} -d ${POSTGRES_DB:-alloy_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - alloy_network
+
+volumes:
+  postgres_data:
+    name: alloy_postgres_data
+
+networks:
+  alloy_network:
+    name: alloy_inventory_net
+    driver: bridge

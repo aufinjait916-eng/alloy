@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Alloy &amp; Melting Inventory Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950 font-sans">
+
+  <!-- Header Branding -->
+  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur-md px-6 py-4">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-tr from-amber-600 via-amber-500 to-yellow-400 flex items-center justify-center shadow-lg shadow-amber-500/20 text-slate-950 font-bold text-xl">
+          ⚱
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-white tracking-wide">ALLOY &amp; MELTING INVENTORY</h1>
+          <p class="text-xs text-slate-400 font-mono">Vault System</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-3 py-1 rounded-full">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Sample Dataset Active (Testing Mode)</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Login Main Content -->
+  <main class="flex-1 flex items-center justify-center px-4 py-8 sm:py-12">
+    <div class="w-full max-w-md">
+
+      <!-- Testing Notice Banner -->
+      <div class="mb-5 p-4 rounded-xl bg-amber-950/40 border border-amber-500/30 text-xs text-amber-200 shadow-md">
+        <div class="flex items-start gap-2.5">
+          <span class="text-base shrink-0">💡</span>
+          <div>
+            <strong class="font-bold text-amber-300">Testing Mode Enabled:</strong>
+            <p class="mt-0.5 text-amber-200/90 leading-relaxed">
+              Pre-loaded sample dataset is ready with Gold, Silver, Copper &amp; Platinum records.
+              Use the <span class="font-bold underline text-white">Instant 1-Click Sign-In</span> buttons below to test without typing credentials.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card Container -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+        <div class="absolute -top-24 -right-24 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="mb-6">
+          <span class="text-xs font-semibold uppercase tracking-wider text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2.5 py-1 rounded-md">
+            Vault Authentication
+          </span>
+          <h2 class="text-2xl font-bold text-white mt-3">Access Inventory Ledger</h2>
+          <p class="text-sm text-slate-400 mt-1">Authenticate session to manage alloy stocks and furnace batches.</p>
+        </div>
+
+        <% if (error) { %>
+          <div class="mb-5 p-3.5 rounded-lg bg-rose-950/80 border border-rose-800/80 text-rose-300 text-sm flex items-start gap-2.5">
+            <svg class="w-5 h-5 text-rose-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span><%= error %></span>
+          </div>
+        <% } %>
+
+        <% if (message) { %>
+          <div class="mb-5 p-3.5 rounded-lg bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 text-sm flex items-start gap-2.5">
+            <svg class="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <span><%= message %></span>
+          </div>
+        <% } %>
+
+        <!-- SECTION 1: INSTANT 1-CLICK LOGIN BUTTONS (Guaranteed to work without cookie issues) -->
+        <div class="mb-6 space-y-2.5">
+          <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Instant 1-Click Access</p>
+          
+          <!-- Instant Factory Manager Button -->
+          <a 
+            href="/login/quick?role=FactoryManager" 
+            class="w-full flex items-center justify-between p-3.5 rounded-xl bg-gradient-to-r from-amber-950/80 to-slate-900 border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white shadow-lg shadow-amber-950/40 transition group"
+          >
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow">
+                FM
+              </div>
+              <div class="text-left">
+                <div class="text-sm font-bold text-amber-300 group-hover:text-amber-200">Enter as Factory Manager</div>
+                <div class="text-[11px] text-slate-400">Full CRUD: Add, Edit, Delete movements &amp; Metals</div>
+              </div>
+            </div>
+            <svg class="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </a>
+
+          <!-- Instant Accounts Button -->
+          <a 
+            href="/login/quick?role=Accounts" 
+            class="w-full flex items-center justify-between p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/80 to-slate-900 border border-emerald-500/50 hover:border-emerald-400 text-emerald-200 hover:text-white shadow-lg shadow-emerald-950/40 transition group"
+          >
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow">
+                AC
+              </div>
+              <div class="text-left">
+                <div class="text-sm font-bold text-emerald-300 group-hover:text-emerald-200">Enter as Accounts User</div>
+                <div class="text-[11px] text-slate-400">Read-Only: View live stock &amp; audit transaction logs</div>
+              </div>
+            </div>
+            <svg class="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </a>
+        </div>
+
+        <div class="relative flex py-2 items-center my-4">
+          <div class="flex-grow border-t border-slate-800"></div>
+          <span class="flex-shrink mx-3 text-[11px] text-slate-500 font-mono uppercase">Or Sign In with Credentials</span>
+          <div class="flex-grow border-t border-slate-800"></div>
+        </div>
+
+        <!-- SECTION 2: Standard Login Form -->
+        <form action="/login" method="POST" class="space-y-4" id="loginForm">
+          <div>
+            <label for="username" class="block text-xs font-medium text-slate-300 mb-1.5 uppercase tracking-wider">Username</label>
+            <div class="relative">
+              <input 
+                type="text" 
+                id="username" 
+                name="username" 
+                required 
+                autocomplete="username"
+                value="<%= typeof username !== 'undefined' && username ? (username === 'admin' ? 'FactoryManager' : username) : 'FactoryManager' %>"
+                placeholder="FactoryManager or accountant" 
+                class="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label for="password" class="block text-xs font-medium text-slate-300 mb-1.5 uppercase tracking-wider">Password</label>
+            <div class="relative">
+              <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                required 
+                autocomplete="current-password"
+                value="Admin123!"
+                placeholder="••••••••••••" 
+                class="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
+              />
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Default passwords: <code class="text-amber-400 font-mono">Admin123!</code> or <code class="text-emerald-400 font-mono">Accounts123!</code></p>
+          </div>
+
+          <button 
+            type="submit" 
+            class="w-full mt-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-semibold py-2.5 px-4 rounded-lg shadow-lg shadow-amber-500/20 active:scale-[0.99] transition duration-150 text-sm flex items-center justify-center gap-2"
+          >
+            <span>Sign In to Vault</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </button>
+        </form>
+
+        <!-- Quick 1-Click Form Autofill for Testing -->
+        <div class="mt-6 pt-4 border-t border-slate-800">
+          <p class="text-[11px] text-slate-400 mb-2 font-medium flex items-center justify-between">
+            <span>PRE-FILL CREDENTIALS</span>
+          </p>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button 
+              type="button" 
+              onclick="fillCredentials('FactoryManager', 'Admin123!')"
+              class="text-left p-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-amber-500/30 transition text-xs text-amber-300 font-mono"
+            >
+              FactoryManager / Admin123!
+            </button>
+
+            <button 
+              type="button" 
+              onclick="fillCredentials('accountant', 'Accounts123!')"
+              class="text-left p-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-emerald-500/30 transition text-xs text-emerald-300 font-mono"
+            >
+              accountant / Accounts123!
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Footer Info -->
+      <div class="mt-6 text-center text-xs text-slate-500">
+        Engine: In-Memory Sample Dataset (Development) &bull; Switchable to PostgreSQL on TrueNAS SCALE
+      </div>
+    </div>
+  </main>
+
+  <footer class="border-t border-slate-900 py-4 text-center text-xs text-slate-500">
+    Alloy &amp; Melting Inventory Manager &bull; Pure Node.js WebApp
+  </footer>
+
+  <script>
+    function fillCredentials(user, pass) {
+      document.getElementById('username').value = user;
+      document.getElementById('password').value = pass;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Alloy &amp; Melting Inventory Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+  <%- include('partials/navbar') %>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Top Action & Notification Bar -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Vault Inventory Dashboard</h1>
+          <span class="text-xs font-mono px-2.5 py-0.5 rounded-full <%= currentUser.role === 'FactoryManager' ? 'bg-amber-950 text-amber-300 border border-amber-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800' %>">
+            <%= currentUser.role %>
+          </span>
+        </div>
+        <p class="text-sm text-slate-400 mt-1">
+          Dynamic stock balance computed in real time.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <% if (currentUser.role === 'FactoryManager') { %>
+          <a 
+            href="<%= authUrl('/transactions/add') %>" 
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95 transition"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Record Movement</span>
+          </a>
+        <% } else { %>
+          <div class="text-xs text-slate-400 bg-slate-900 border border-slate-800 px-3 py-2 rounded-lg flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <span>Auditor Mode: Read-Only Balance Log</span>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Alert / Toast Messages -->
+    <% if (typeof query !== 'undefined' && query.msg) { %>
+      <div class="mb-6 p-4 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 text-sm flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-5 h-5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>
+            <% if (query.msg === 'created') { %> Transaction recorded and stock recalculated successfully. <% } %>
+            <% if (query.msg === 'updated') { %> Transaction updated and vault balance refreshed. <% } %>
+            <% if (query.msg === 'deleted') { %> Transaction deleted and stock balance restored. <% } %>
+            <% if (query.msg === 'metal_added') { %> New metal master specification cataloged. <% } %>
+          </span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-emerald-400 hover:text-emerald-200 text-xs font-mono">Dismiss</button>
+      </div>
+    <% } %>
+
+    <!-- KPI Metrics Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      
+      <!-- Total Metal Types -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tracked Alloys</span>
+          <span class="p-2 rounded-lg bg-slate-800 text-amber-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+          </span>
+        </div>
+        <div class="text-2xl font-bold text-white mt-3"><%= stocks.length %></div>
+        <p class="text-xs text-slate-500 mt-1">Cataloged in metal_master</p>
+      </div>
+
+      <!-- Net Vault Balance (Grams) -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Vault Stock</span>
+          <span class="p-2 rounded-lg bg-emerald-950 text-emerald-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </span>
+        </div>
+        <% 
+          const netStock = stocks.reduce((acc, s) => acc + Number(s.current_balance || 0), 0);
+        %>
+        <div class="text-2xl font-bold text-emerald-400 mt-3 font-mono">
+          <%= netStock.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) %> <span class="text-xs font-sans text-slate-400 font-normal">g</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Current net weight in vault</p>
+      </div>
+
+      <!-- Total Inflow -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Received (IN)</span>
+          <span class="p-2 rounded-lg bg-blue-950 text-blue-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+            </svg>
+          </span>
+        </div>
+        <% 
+          const totalIn = stocks.reduce((acc, s) => acc + Number(s.total_in || 0), 0);
+        %>
+        <div class="text-2xl font-bold text-blue-400 mt-3 font-mono">
+          <%= totalIn.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) %> <span class="text-xs font-sans text-slate-400 font-normal">g</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Ingots, scrap &amp; consignments</p>
+      </div>
+
+      <!-- Total Melted / Outflow -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Melted / Dispatched (OUT)</span>
+          <span class="p-2 rounded-lg bg-amber-950 text-amber-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+            </svg>
+          </span>
+        </div>
+        <% 
+          const totalOut = stocks.reduce((acc, s) => acc + Number(s.total_out || 0), 0);
+        %>
+        <div class="text-2xl font-bold text-amber-400 mt-3 font-mono">
+          <%= totalOut.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) %> <span class="text-xs font-sans text-slate-400 font-normal">g</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Furnace charges &amp; cast prep</p>
+      </div>
+
+    </div>
+
+    <!-- Live Alloy Stock Table Section -->
+    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl overflow-hidden mb-10">
+      
+      <!-- Table Header -->
+      <div class="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></div>
+          <div>
+            <h2 class="text-lg font-bold text-white">Live Alloy Stock Balances</h2>
+            <p class="text-xs text-slate-400">Calculated dynamically: <code class="text-amber-400 font-mono">CurrentBalance = SUM(IN) - SUM(OUT)</code></p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Positive
+            <span class="w-2 h-2 rounded-full bg-amber-500 ml-2"></span> Low
+            <span class="w-2 h-2 rounded-full bg-rose-500 ml-2"></span> Depleted
+          </span>
+        </div>
+      </div>
+
+      <!-- Responsive Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-950/80 text-xs uppercase font-mono text-slate-400 border-b border-slate-800">
+            <tr>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Metal / Alloy Name</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold">Purity Grade</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-right">Total Inflow (g)</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-right">Melted Outflow (g)</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-right">Current Balance</th>
+              <th scope="col" class="px-6 py-3.5 font-semibold text-center">Status</th>
+              <% if (currentUser.role === 'FactoryManager') { %>
+                <th scope="col" class="px-6 py-3.5 font-semibold text-right">Quick Action</th>
+              <% } %>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 font-mono text-xs">
+            <% if (stocks.length === 0) { %>
+              <tr>
+                <td colspan="7" class="px-6 py-8 text-center text-slate-500 font-sans text-sm">
+                  No metals found in metal_master.
+                </td>
+              </tr>
+            <% } %>
+
+            <% stocks.forEach(stock => { %>
+              <% 
+                const bal = Number(stock.current_balance || 0);
+                const tin = Number(stock.total_in || 0);
+                const tout = Number(stock.total_out || 0);
+                
+                let statusBg = 'bg-emerald-950/80 text-emerald-300 border-emerald-800';
+                let statusDot = 'bg-emerald-400';
+                let statusText = 'In Stock';
+                
+                if (bal <= 0) {
+                  statusBg = 'bg-rose-950/80 text-rose-300 border-rose-800';
+                  statusDot = 'bg-rose-400';
+                  statusText = 'Depleted / Deficit';
+                } else if (bal < 500) {
+                  statusBg = 'bg-amber-950/80 text-amber-300 border-amber-800';
+                  statusDot = 'bg-amber-400';
+                  statusText = 'Low Reserve';
+                }
+              %>
+              <tr class="hover:bg-slate-800/40 transition">
+                <!-- Metal Name -->
+                <td class="px-6 py-4 font-sans font-medium text-white flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full <%= statusDot %>"></span>
+                  <span><%= stock.metal_name %></span>
+                </td>
+
+                <!-- Purity Grade -->
+                <td class="px-6 py-4 text-slate-400">
+                  <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700 text-slate-300">
+                    <%= stock.purity_grade %>
+                  </span>
+                </td>
+
+                <!-- Total IN -->
+                <td class="px-6 py-4 text-right text-slate-300">
+                  <%= tin.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) %> <%= stock.uom %>
+                </td>
+
+                <!-- Total OUT -->
+                <td class="px-6 py-4 text-right text-slate-400">
+                  <%= tout.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) %> <%= stock.uom %>
+                </td>
+
+                <!-- Current Balance -->
+                <td class="px-6 py-4 text-right">
+                  <span class="text-sm font-bold <%= bal <= 0 ? 'text-rose-400' : (bal < 500 ? 'text-amber-400' : 'text-emerald-400') %>">
+                    <%= bal.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) %> <%= stock.uom %>
+                  </span>
+                </td>
+
+                <!-- Status Indicator -->
+                <td class="px-6 py-4 text-center font-sans">
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border <%= statusBg %>">
+                    <span class="w-1.5 h-1.5 rounded-full <%= statusDot %>"></span>
+                    <%= statusText %>
+                  </span>
+                </td>
+
+                <!-- Action Button for FactoryManager -->
+                <% if (currentUser.role === 'FactoryManager') { %>
+                  <td class="px-6 py-4 text-right font-sans">
+                    <a 
+                      href="<%= authUrl('/transactions/add?metal_id=' + stock.metal_id) %>"
+                      class="text-xs text-amber-400 hover:text-amber-300 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 rounded border border-amber-500/40 transition"
+                    >
+                      + Transact
+                    </a>
+                  </td>
+                <% } %>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Transactions Activity Section -->
+    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold text-white">Recent Vault Transactions</h3>
+          <p class="text-xs text-slate-400">Latest melting crucible discharges and inventory consignments</p>
+        </div>
+        <a href="<%= authUrl('/transactions') %>" class="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1">
+          <span>View All Transactions</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </a>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-950/80 text-xs uppercase font-mono text-slate-400 border-b border-slate-800">
+            <tr>
+              <th scope="col" class="px-6 py-3 font-semibold">ID</th>
+              <th scope="col" class="px-6 py-3 font-semibold">Date &amp; Time</th>
+              <th scope="col" class="px-6 py-3 font-semibold">Metal</th>
+              <th scope="col" class="px-6 py-3 font-semibold">Type</th>
+              <th scope="col" class="px-6 py-3 font-semibold text-right">Quantity</th>
+              <th scope="col" class="px-6 py-3 font-semibold">Entity / Process Remarks</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 font-mono text-xs">
+            <% if (recentTransactions.length === 0) { %>
+              <tr>
+                <td colspan="6" class="px-6 py-6 text-center text-slate-500 font-sans text-sm">
+                  No transaction records recorded yet.
+                </td>
+              </tr>
+            <% } %>
+
+            <% recentTransactions.forEach(t => { %>
+              <tr class="hover:bg-slate-800/40 transition">
+                <td class="px-6 py-3.5 text-slate-400">#<%= t.transaction_id %></td>
+                <td class="px-6 py-3.5 text-slate-400">
+                  <%= new Date(t.trans_date).toLocaleString() %>
+                </td>
+                <td class="px-6 py-3.5 font-sans font-medium text-white">
+                  <%= t.metal_name %> <span class="text-xs text-slate-400 font-mono">(<%= t.purity_grade %>)</span>
+                </td>
+                <td class="px-6 py-3.5 font-sans">
+                  <% if (t.transaction_type === 'IN') { %>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                      &darr; IN
+                    </span>
+                  <% } else { %>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-950 text-amber-400 border border-amber-800">
+                      &uarr; OUT (Melt)
+                    </span>
+                  <% } %>
+                </td>
+                <td class="px-6 py-3.5 text-right font-bold <%= t.transaction_type === 'IN' ? 'text-emerald-400' : 'text-amber-400' %>">
+                  <%= Number(t.quantity).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) %> <%= t.uom || 'g' %>
+                </td>
+                <td class="px-6 py-3.5 font-sans text-slate-300">
+                  <%= t.entity_name %>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <%- include('partials/footer') %>
+</body>
+</html>

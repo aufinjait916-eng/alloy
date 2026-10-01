@@ -1,0 +1,180 @@
+<!-- Top Navigation Bar -->
+<header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-16">
+      
+      <!-- Brand & Main Nav -->
+      <div class="flex items-center gap-6">
+        <a href="<%= authUrl('/dashboard') %>" class="flex items-center gap-3 group">
+          <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-amber-600 to-yellow-400 flex items-center justify-center shadow-md shadow-amber-500/20 text-slate-950 font-bold text-lg group-hover:scale-105 transition">
+            ⚱
+          </div>
+          <div>
+            <span class="text-sm sm:text-base font-bold text-white tracking-wide block">ALLOY VAULT</span>
+          </div>
+        </a>
+
+        <!-- Desktop Navigation Links -->
+        <nav class="hidden lg:flex items-center space-x-1">
+          <a 
+            href="<%= authUrl('/dashboard') %>" 
+            class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition <%= path === '/dashboard' ? 'bg-slate-800 text-amber-400 shadow-sm border border-slate-700' : 'text-slate-300 hover:text-white hover:bg-slate-800/60' %>"
+          >
+            Dashboard
+          </a>
+
+          <a 
+            href="<%= authUrl('/transactions') %>" 
+            class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition <%= path.startsWith('/transactions') ? 'bg-slate-800 text-amber-400 shadow-sm border border-slate-700' : 'text-slate-300 hover:text-white hover:bg-slate-800/60' %>"
+          >
+            Transactions
+          </a>
+
+          <!-- Melting Sessions (Visible to both Roles) -->
+          <a 
+            href="<%= authUrl('/melting/sessions') %>" 
+            class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition <%= path.startsWith('/melting/sessions') ? 'bg-slate-800 text-amber-400 shadow-sm border border-slate-700' : 'text-slate-300 hover:text-white hover:bg-slate-800/60' %>"
+          >
+            Melting Sessions
+          </a>
+
+          <!-- Melting Rules (Manager Only) -->
+          <% if (currentUser && currentUser.role === 'FactoryManager') { %>
+            <a 
+              href="<%= authUrl('/rules') %>" 
+              class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition <%= path.startsWith('/rules') ? 'bg-slate-800 text-amber-400 shadow-sm border border-slate-700' : 'text-slate-300 hover:text-white hover:bg-slate-800/60' %>"
+            >
+              Melting Rules
+            </a>
+
+            <a 
+              href="<%= authUrl('/metals') %>" 
+              class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition <%= path.startsWith('/metals') ? 'bg-slate-800 text-amber-400 shadow-sm border border-slate-700' : 'text-slate-300 hover:text-white hover:bg-slate-800/60' %>"
+            >
+              Metal Master
+            </a>
+          <% } %>
+        </nav>
+      </div>
+
+      <!-- User Profile & Action Toolbar -->
+      <div class="flex items-center gap-2.5">
+        
+        <!-- Factory Manager Quick Action Buttons -->
+        <% if (currentUser && currentUser.role === 'FactoryManager') { %>
+          <a 
+            href="<%= authUrl('/melting/prepare') %>" 
+            class="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-md shadow-amber-500/20 transition active:scale-95"
+            title="Prepare and execute crucible melting charge"
+          >
+            <span>🔥</span>
+            <span>Prepare Melt</span>
+          </a>
+
+          <a 
+            href="<%= authUrl('/transactions/add') %>" 
+            class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition active:scale-95"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Movement</span>
+          </a>
+        <% } %>
+
+        <!-- User Role Badge -->
+        <% if (currentUser) { %>
+          <div class="flex items-center gap-2 pl-2 border-l border-slate-800">
+            <div class="text-right hidden sm:block">
+              <% if (currentUser.role === 'FactoryManager') { %>
+                <div class="text-xs font-semibold text-amber-400 font-mono">Factory Manager</div>
+              <% } else { %>
+                <div class="text-xs font-semibold text-white"><%= currentUser.username %></div>
+                <div class="text-[10px]">
+                  <span class="text-emerald-400 font-mono font-medium">Accounts (Read-Only)</span>
+                </div>
+              <% } %>
+            </div>
+
+            <!-- Role Badge Capsule -->
+            <% if (currentUser.role === 'FactoryManager') { %>
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-950/80 border border-amber-800/80 text-amber-300">
+                FM
+              </span>
+            <% } else { %>
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-950/80 border border-emerald-800/80 text-emerald-300">
+                ACC
+              </span>
+            <% } %>
+
+            <!-- Logout Form -->
+            <form action="<%= authUrl('/logout') %>" method="POST" class="inline" onsubmit="sessionStorage.removeItem('alloy_auth_token');">
+              <button 
+                type="submit" 
+                title="Sign out"
+                class="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 rounded-lg transition"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </form>
+          </div>
+        <% } %>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Mobile Secondary Navigation Bar -->
+  <div class="lg:hidden border-t border-slate-800/80 bg-slate-900/60 px-3 py-2 flex items-center justify-around text-[11px] overflow-x-auto gap-2">
+    <a href="<%= authUrl('/dashboard') %>" class="<%= path === '/dashboard' ? 'text-amber-400 font-bold' : 'text-slate-400' %>">
+      Dashboard
+    </a>
+    <a href="<%= authUrl('/transactions') %>" class="<%= path.startsWith('/transactions') ? 'text-amber-400 font-bold' : 'text-slate-400' %>">
+      Transactions
+    </a>
+    <a href="<%= authUrl('/melting/sessions') %>" class="<%= path.startsWith('/melting/sessions') ? 'text-amber-400 font-bold' : 'text-slate-400' %>">
+      Sessions
+    </a>
+    <% if (currentUser && currentUser.role === 'FactoryManager') { %>
+      <a href="<%= authUrl('/melting/prepare') %>" class="text-amber-400 font-bold">
+        🔥 Melt
+      </a>
+      <a href="<%= authUrl('/rules') %>" class="<%= path.startsWith('/rules') ? 'text-amber-400 font-bold' : 'text-slate-400' %>">
+        Rules
+      </a>
+      <a href="<%= authUrl('/metals') %>" class="<%= path.startsWith('/metals') ? 'text-amber-400 font-bold' : 'text-slate-400' %>">
+        Metals
+      </a>
+    <% } %>
+  </div>
+
+  <!-- Automated Auth Token Bridge for IFrame Cookie Partitioning / Safari / Incognito -->
+  <script>
+    (function() {
+      const serverToken = '<%= typeof authToken !== "undefined" ? authToken : "" %>';
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('auth');
+
+      const tokenToStore = serverToken || urlToken;
+      if (tokenToStore) {
+        try { sessionStorage.setItem('alloy_auth_token', tokenToStore); } catch(e){}
+      }
+
+      // Universal click interceptor to guarantee auth token is preserved on any link navigation
+      document.addEventListener('click', function(e) {
+        const a = e.target.closest('a[href^="/"]');
+        if (a && !a.href.includes('auth=') && !a.href.includes('/logout') && !a.getAttribute('href').startsWith('#')) {
+          const activeToken = sessionStorage.getItem('alloy_auth_token') || serverToken;
+          if (activeToken) {
+            e.preventDefault();
+            const sep = a.href.includes('?') ? '&' : '?';
+            window.location.href = a.href + sep + 'auth=' + encodeURIComponent(activeToken);
+          }
+        }
+      }, true);
+    })();
+  </script>
+</header>

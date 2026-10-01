@@ -1,0 +1,6 @@
+{
+  "name": "Alloy & Melting Inventory Manager",
+  "description": "Production-ready pure webapp for alloy inventory and melting transactions with Express, EJS, PostgreSQL, and TrueNAS SCALE Docker deployment.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

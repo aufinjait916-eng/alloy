@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prepare &amp; Execute Melting Session - Alloy Vault</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+  <%- include('partials/navbar') %>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Page Header & Action -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Crucible Melting Session Builder</h1>
+          <span class="text-xs font-mono bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-1 rounded-full">
+            FactoryManager Execution
+          </span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <a 
+          href="<%= authUrl('/melting/sessions') %>" 
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
+        >
+          <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          <span>View Executed Sessions Log</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Error Alert Container -->
+    <div id="calcAlertBox" class="hidden mb-6 p-4 rounded-xl text-xs flex items-start gap-2.5">
+      <span class="text-base shrink-0" id="calcAlertIcon">⚠️</span>
+      <div id="calcAlertText"></div>
+    </div>
+
+    <!-- 2-COLUMN WORKSPACE: LEFT (Calculator & Rule Inputs) / RIGHT (Active Batch Queue & Aggregation) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      
+      <!-- LEFT: BATCH CHARGE CALCULATOR -->
+      <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-5">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+            <h2 class="text-base font-bold text-white uppercase tracking-wider">1. Charge Parameters</h2>
+          </div>
+          <span id="formulaBadge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700">
+            Rule Configured
+          </span>
+        </div>
+
+        <div class="space-y-4">
+          <!-- Melting Rule Selector -->
+          <div>
+            <label for="ruleSelect" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              Melting Rule Specification <span class="text-rose-400">*</span>
+            </label>
+            <select 
+              id="ruleSelect" 
+              onchange="onRuleChange()"
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 transition"
+            >
+              <% rules.forEach(r => { %>
+                <option value="<%= r.rule_id %>">
+                  <%= r.scenario_name %> (Target: <%= Number(r.target_purity).toFixed(2) %>%)
+                </option>
+              <% }); %>
+            </select>
+          </div>
+
+          <!-- Rule Details Summary Strip -->
+          <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs font-mono grid grid-cols-3 gap-2 text-center">
+            <div>
+              <span class="text-[10px] text-slate-500 block uppercase">Target Purity</span>
+              <span id="lblTargetPurity" class="font-bold text-amber-400 text-sm">75.00%</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-500 block uppercase">Compute Var</span>
+              <span id="lblComputeVar" class="font-bold text-blue-400 text-sm">E (Metal)</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-500 block uppercase">Ratio Multiplier (%)</span>
+              <span id="lblComputeRatio" class="font-bold text-slate-200 text-sm">25.00%</span>
+              <span id="lblComputeRatioDec" class="text-[9px] text-slate-500 block">Ratio: 0.2500</span>
+            </div>
+          </div>
+
+          <!-- Inputs Group: C & D (Pure Metal) -->
+          <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-3">
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-300">
+              <span class="flex items-center gap-1.5 text-emerald-400">
+                <span>🪙</span> Pure Metal Input (C &amp; D)
+              </span>
+              <span id="cComputedIndicator" class="hidden text-[10px] text-purple-300 bg-purple-950 px-1.5 py-0.5 rounded border border-purple-800">
+                Auto Computed
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] text-slate-400 uppercase tracking-wider mb-1">C: Pure Weight (g)</label>
+                <input 
+                  type="number" 
+                  step="0.001" 
+                  min="0.001" 
+                  id="inputC" 
+                  value="300.000" 
+                  oninput="recalculateBatch()"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 uppercase tracking-wider mb-1">D: Pure Purity (%)</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  min="0.01" 
+                  max="100.00" 
+                  id="inputD" 
+                  value="99.90" 
+                  oninput="recalculateBatch()"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Inputs Group: E & F (Scrap / Metal Input) -->
+          <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-3">
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-300">
+              <span class="flex items-center gap-1.5 text-amber-400">
+                <span>🔩</span> Metal / Scrap Input (E &amp; F)
+              </span>
+              <span id="eComputedIndicator" class="text-[10px] text-blue-300 bg-blue-950 px-1.5 py-0.5 rounded border border-blue-800">
+                Auto Computed
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] text-slate-400 uppercase tracking-wider mb-1">E: Metal Weight (g)</label>
+                <input 
+                  type="number" 
+                  step="0.001" 
+                  min="0.000" 
+                  id="inputE" 
+                  value="75.000" 
+                  oninput="recalculateBatch()"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 uppercase tracking-wider mb-1">F: Metal Purity (%)</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  min="0.00" 
+                  max="100.00" 
+                  id="inputF" 
+                  value="68.00" 
+                  oninput="recalculateBatch()"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+            <div class="text-[10px] text-slate-500 flex justify-between">
+              <span>Allowed Purity Range:</span>
+              <span id="lblAllowedRange" class="font-mono text-slate-400 font-bold">50.00% - 80.00%</span>
+            </div>
+          </div>
+
+          <!-- COMPUTATION RESULTS FOR CURRENT CHARGE -->
+          <div class="bg-gradient-to-br from-slate-950 to-slate-900 p-4 rounded-xl border border-amber-500/30 text-xs font-mono space-y-2.5">
+            <div class="flex items-center justify-between text-slate-400 pb-1 border-b border-slate-800">
+              <span class="font-bold text-white uppercase text-[11px]">Calculated Charge Output</span>
+              <span class="text-[10px] text-amber-400">G = Pure / (Purity / 100)</span>
+            </div>
+
+            <!-- Pure Content Sub-Totals -->
+            <div class="text-[11px] text-slate-400 space-y-1 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
+              <div class="flex justify-between">
+                <span>Pure from C (C &times; D/100):</span>
+                <span id="resPureFromC" class="font-bold text-emerald-400">299.700 g</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Pure from E (E &times; F/100):</span>
+                <span id="resPureFromE" class="font-bold text-blue-400">51.000 g</span>
+              </div>
+              <div class="flex justify-between pt-1 border-t border-slate-800/80 font-bold text-slate-200">
+                <span>Total Pure Metal Content:</span>
+                <span id="resTotalPure">350.700 g</span>
+              </div>
+            </div>
+
+            <div class="flex justify-between items-center pt-1">
+              <span class="text-slate-300 font-semibold">Target Weight (G):</span>
+              <span id="resTargetG" class="text-base font-bold text-white font-mono">467.600 g</span>
+            </div>
+
+            <div class="flex justify-between items-center">
+              <span class="text-amber-300 font-semibold">Required Alloy [G - (C + E)]:</span>
+              <span id="resAlloyH" class="text-base font-bold text-amber-400 font-mono">92.600 g</span>
+            </div>
+
+            <!-- Component Breakdown Preview -->
+            <div class="pt-2 border-t border-slate-800 space-y-1.5" id="componentBreakdownPreview">
+              <!-- Dynamically generated rows -->
+            </div>
+          </div>
+
+          <!-- Add to Queue Button -->
+          <button 
+            type="button" 
+            onclick="addBatchToQueue()"
+            id="btnAddQueue"
+            class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition text-sm flex items-center justify-center gap-2"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Add Calculated Batch to Session Queue</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT: ACTIVE BATCH QUEUE & LIVE AGGREGATION BAR -->
+      <div class="lg:col-span-7 flex flex-col justify-between space-y-6">
+        
+        <!-- ACTIVE QUEUE CONTAINER -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl flex-1 flex flex-col">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">📋</span>
+              <h2 class="text-base font-bold text-white uppercase tracking-wider">2. Session Batch Queue</h2>
+            </div>
+            <span class="text-xs font-mono bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-700">
+              <span id="queueCountBadge">0</span> batches staged
+            </span>
+          </div>
+
+          <!-- Batches Table -->
+          <div class="overflow-x-auto flex-1">
+            <table class="w-full text-left text-xs text-slate-300 font-mono">
+              <thead class="bg-slate-950 text-[10px] uppercase text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th scope="col" class="py-2.5 px-3 font-semibold">#</th>
+                  <th scope="col" class="py-2.5 px-3 font-semibold">Rule Spec</th>
+                  <th scope="col" class="py-2.5 px-3 font-semibold text-right">Pure (C)</th>
+                  <th scope="col" class="py-2.5 px-3 font-semibold text-right">Metal (E)</th>
+                  <th scope="col" class="py-2.5 px-3 font-semibold text-right text-white">Target (G)</th>
+                  <th scope="col" class="py-2.5 px-3 font-semibold text-right text-amber-400">Alloy (H)</th>
+                  <th scope="col" class="py-2.5 px-3 font-semibold text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="queueTbody" class="divide-y divide-slate-800/60">
+                <tr id="emptyQueueRow">
+                  <td colspan="7" class="py-12 text-center text-slate-500 font-sans text-xs">
+                    No batches added to queue yet. Select rule and click "Add Calculated Batch to Session Queue".
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- LIVE TOTAL AGGREGATION BAR (Crucial Required Feature) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span>3. Live Session Total Aggregation</span>
+            </h3>
+            <span class="text-[11px] font-mono text-slate-400">Crucible Net Weight Totals</span>
+          </div>
+
+          <!-- Metric Cards Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span class="text-[10px] text-slate-500 block uppercase font-mono">Total Target (G)</span>
+              <span id="aggTotalTargetG" class="text-lg font-bold text-white font-mono mt-0.5 block">0.000 g</span>
+            </div>
+
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span class="text-[10px] text-slate-500 block uppercase font-mono">Total Required Alloy (H)</span>
+              <span id="aggTotalAlloyH" class="text-lg font-bold text-amber-400 font-mono mt-0.5 block">0.000 g</span>
+            </div>
+
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span class="text-[10px] text-slate-500 block uppercase font-mono">Total Pure Input (C)</span>
+              <span id="aggTotalPureC" class="text-lg font-bold text-emerald-400 font-mono mt-0.5 block">0.000 g</span>
+            </div>
+
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span class="text-[10px] text-slate-500 block uppercase font-mono">Total Metal Input (E)</span>
+              <span id="aggTotalMetalE" class="text-lg font-bold text-blue-400 font-mono mt-0.5 block">0.000 g</span>
+            </div>
+          </div>
+
+          <!-- Total Alloy Consumption Breakdown by Metal with Live Stock Verification -->
+          <div class="mb-5 bg-slate-950 p-4 rounded-xl border border-slate-800">
+            <span class="text-[10px] text-slate-400 uppercase tracking-wider font-mono block mb-2">
+              Combined Alloy Metal Consumption vs Live Vault Stock:
+            </span>
+            <div id="alloyConsumptionList" class="space-y-2">
+              <span class="text-xs text-slate-500 italic">No alloy required yet.</span>
+            </div>
+          </div>
+
+          <!-- SUBMIT / COMMIT FORM (POST /melting/process) -->
+          <form 
+            action="<%= authUrl('/melting/process') %>" 
+            method="POST" 
+            id="commitSessionForm"
+          >
+            <input type="hidden" name="auth" value="<%= authToken %>">
+            <input type="hidden" name="queue_data" id="queueDataPayload" value="[]">
+
+            <button 
+              type="button" 
+              id="btnCommitSession"
+              onclick="submitSessionExecution()"
+              class="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold py-3.5 px-6 rounded-xl shadow-xl shadow-emerald-950/40 text-sm flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
+            >
+              <span>Commit &amp; Execute Melting Session</span>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </button>
+          </form>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <%- include('partials/footer') %>
+
+  <!-- CLIENT-SIDE BATCH QUEUE & METALLURGY CALCULATION ENGINE -->
+  <script>
+    const rulesData = <%- JSON.stringify(rules) %>;
+    const stocksMap = <%- JSON.stringify(stocksMap) %>;
+    const metalsCatalog = <%- JSON.stringify(metals) %>;
+
+    // Active session queue in memory
+    let sessionQueue = [];
+
+    // Current calculation state
+    let currentCalc = null;
+
+    function getSelectedRule() {
+      const select = document.getElementById('ruleSelect');
+      const ruleId = parseInt(select.value, 10);
+      return rulesData.find(r => r.rule_id === ruleId) || rulesData[0];
+    }
+
+    function onRuleChange() {
+      const rule = getSelectedRule();
+      if (!rule) return;
+
+      document.getElementById('lblTargetPurity').textContent = Number(rule.target_purity).toFixed(2) + '%';
+      document.getElementById('lblComputeVar').textContent = rule.compute_parameter === 'E' ? 'E (Metal)' : 'C (Pure)';
+      document.getElementById('lblComputeRatio').textContent = Number(rule.compute_percentage).toFixed(2) + '%';
+      document.getElementById('lblComputeRatioDec').textContent = 'Ratio: ' + (Number(rule.compute_percentage) / 100).toFixed(4);
+      document.getElementById('lblAllowedRange').textContent = `${Number(rule.purity_min).toFixed(2)}% - ${Number(rule.purity_max).toFixed(2)}%`;
+
+      const cInd = document.getElementById('cComputedIndicator');
+      const eInd = document.getElementById('eComputedIndicator');
+      const inputC = document.getElementById('inputC');
+      const inputE = document.getElementById('inputE');
+
+      if (rule.compute_parameter === 'E') {
+        cInd.classList.add('hidden');
+        eInd.classList.remove('hidden');
+        inputE.readOnly = true;
+        inputE.classList.add('bg-slate-950', 'text-slate-400');
+        inputC.readOnly = false;
+        inputC.classList.remove('bg-slate-950', 'text-slate-400');
+      } else {
+        cInd.classList.remove('hidden');
+        eInd.classList.add('hidden');
+        inputC.readOnly = true;
+        inputC.classList.add('bg-slate-950', 'text-slate-400');
+        inputE.readOnly = false;
+        inputE.classList.remove('bg-slate-950', 'text-slate-400');
+      }
+
+      recalculateBatch();
+    }
+
+    function showAlert(msg, isError = true) {
+      const box = document.getElementById('calcAlertBox');
+      const icon = document.getElementById('calcAlertIcon');
+      const text = document.getElementById('calcAlertText');
+
+      box.classList.remove('hidden', 'bg-rose-950/80', 'border-rose-800', 'text-rose-300', 'bg-emerald-950/80', 'border-emerald-800', 'text-emerald-300');
+      if (isError) {
+        box.classList.add('bg-rose-950/80', 'border', 'border-rose-800', 'text-rose-300');
+        icon.textContent = '⛔';
+      } else {
+        box.classList.add('bg-emerald-950/80', 'border', 'border-emerald-800', 'text-emerald-300');
+        icon.textContent = 'ℹ️';
+      }
+      text.innerHTML = msg;
+    }
+
+    function clearAlert() {
+      document.getElementById('calcAlertBox').classList.add('hidden');
+    }
+
+    function recalculateBatch() {
+      clearAlert();
+      const rule = getSelectedRule();
+      if (!rule) return;
+
+      const inputC = document.getElementById('inputC');
+      const inputD = document.getElementById('inputD');
+      const inputE = document.getElementById('inputE');
+      const inputF = document.getElementById('inputF');
+
+      let c = parseFloat(inputC.value) || 0;
+      let d = parseFloat(inputD.value) || 0;
+      let e = parseFloat(inputE.value) || 0;
+      let f = parseFloat(inputF.value) || 0;
+
+      // Ratio multiplier is taken in percentage (e.g. 142.86 is 1.4286 ratio)
+      // Consider calculation to be divided by 100 as this is a percentage
+      const ratio = Number(rule.compute_percentage) / 100;
+      const targetPurity = Number(rule.target_purity);
+      const pMin = Number(rule.purity_min);
+      const pMax = Number(rule.purity_max);
+
+      // Perform dynamic computation based on compute_parameter
+      if (rule.compute_parameter === 'E') {
+        e = Math.round(c * ratio * 1000) / 1000;
+        inputE.value = e.toFixed(3);
+        if (f < pMin || f > pMax) {
+          showAlert(`Validation: Metal Purity (F: ${f.toFixed(2)}%) is outside allowed rule range [${pMin.toFixed(2)}% - ${pMax.toFixed(2)}%].`);
+        }
+      } else {
+        c = Math.round(e * ratio * 1000) / 1000;
+        inputC.value = c.toFixed(3);
+        if (d < pMin || d > pMax) {
+          showAlert(`Validation: Pure Purity (D: ${d.toFixed(2)}%) is outside allowed rule range [${pMin.toFixed(2)}% - ${pMax.toFixed(2)}%].`);
+        }
+      }
+
+      // Values D and F are in percentages, so they are divided by 100 before calculation of G
+      const pureD = d / 100;
+      const pureF = f / 100;
+
+      const pureFromC = c * pureD;
+      const pureFromE = e * pureF;
+      const totalPure = pureFromC + pureFromE;
+
+      // Target Purity is in percentage, so divided by 100
+      const targetPurityRatio = targetPurity / 100;
+
+      // Target Weight G = Total Pure / (Target Purity / 100)
+      let g = 0;
+      if (targetPurityRatio > 0) {
+        g = Math.round((totalPure / targetPurityRatio) * 1000) / 1000;
+      }
+
+      // Required Alloy to be evaluated like this: G - (C + E)
+      let h = Math.round((g - (c + e)) * 1000) / 1000;
+
+      // Update UI metric outputs
+      document.getElementById('resPureFromC').textContent = pureFromC.toFixed(3) + ' g';
+      document.getElementById('resPureFromE').textContent = pureFromE.toFixed(3) + ' g';
+      document.getElementById('resTotalPure').textContent = totalPure.toFixed(3) + ' g';
+      document.getElementById('resTargetG').textContent = g.toFixed(3) + ' g';
+      document.getElementById('resAlloyH').textContent = h.toFixed(3) + ' g';
+
+      // Compute component breakdown for H
+      const previewContainer = document.getElementById('componentBreakdownPreview');
+      previewContainer.innerHTML = '';
+
+      const componentAllocations = [];
+
+      if (rule.components && rule.components.length > 0) {
+        rule.components.forEach(comp => {
+          const compWeight = Math.round(h * Number(comp.percentage) * 1000) / 1000;
+          const currentVaultStock = stocksMap[comp.metal_id] !== undefined ? stocksMap[comp.metal_id] : 0;
+          const hasStock = currentVaultStock >= compWeight;
+
+          componentAllocations.push({
+            metal_id: comp.metal_id,
+            metal_name: comp.metal_name,
+            percentage: Number(comp.percentage),
+            issued_weight: compWeight,
+            currentVaultStock,
+            hasStock
+          });
+
+          const div = document.createElement('div');
+          div.className = 'flex justify-between items-center text-[11px]';
+          div.innerHTML = `
+            <span class="text-slate-400">
+              &bull; ${comp.metal_name} (${(Number(comp.percentage)*100).toFixed(0)}%):
+            </span>
+            <div class="flex items-center gap-2">
+              <span class="font-mono font-bold text-amber-300">${compWeight.toFixed(3)} g</span>
+              <span class="text-[9px] px-1.5 py-0.2 rounded font-sans ${hasStock ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800'}">
+                ${hasStock ? 'In Stock' : 'Low Stock'}
+              </span>
+            </div>
+          `;
+          previewContainer.appendChild(div);
+        });
+      }
+
+      currentCalc = {
+        rule_id: rule.rule_id,
+        rule_name: rule.scenario_name,
+        target_purity: targetPurity,
+        c,
+        d,
+        e,
+        f,
+        g,
+        h,
+        components: componentAllocations
+      };
+    }
+
+    function addBatchToQueue() {
+      if (!currentCalc) {
+        recalculateBatch();
+      }
+
+      if (!currentCalc || currentCalc.g <= 0) {
+        showAlert('Invalid charge calculations. Target Weight (G) must be greater than 0. Please verify inputs.', true);
+        return;
+      }
+
+      // Add to queue with a deep clone
+      sessionQueue.push(JSON.parse(JSON.stringify(currentCalc)));
+      renderQueue();
+      showAlert(`✓ Batch #${sessionQueue.length} added to session queue (${currentCalc.rule_name} - ${currentCalc.g.toFixed(3)}g). Click "Commit & Execute" below to process.`, false);
+    }
+
+    function removeBatchFromQueue(index) {
+      sessionQueue.splice(index, 1);
+      renderQueue();
+    }
+
+    function renderQueue() {
+      const tbody = document.getElementById('queueTbody');
+      const countBadge = document.getElementById('queueCountBadge');
+      const payloadInput = document.getElementById('queueDataPayload');
+      const btnCommit = document.getElementById('btnCommitSession');
+
+      countBadge.textContent = sessionQueue.length;
+      tbody.innerHTML = '';
+
+      if (sessionQueue.length === 0) {
+        tbody.innerHTML = `
+          <tr id="emptyQueueRow">
+            <td colspan="7" class="py-12 text-center text-slate-500 font-sans text-xs">
+              No batches added to queue yet. Select rule and click "Add Calculated Batch to Session Queue".
+            </td>
+          </tr>
+        `;
+        payloadInput.value = '[]';
+        btnCommit.disabled = false;
+        btnCommit.classList.remove('opacity-40', 'cursor-not-allowed');
+        btnCommit.innerHTML = `
+          <span>Commit &amp; Execute Melting Session</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        `;
+        updateAggregation();
+        return;
+      }
+
+      btnCommit.disabled = false;
+      btnCommit.classList.remove('opacity-40', 'cursor-not-allowed');
+      btnCommit.innerHTML = `
+        <span>Commit &amp; Execute Melting Session (${sessionQueue.length} ${sessionQueue.length === 1 ? 'batch' : 'batches'})</span>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+        </svg>
+      `;
+      payloadInput.value = JSON.stringify(sessionQueue);
+
+      sessionQueue.forEach((batch, index) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition';
+        tr.innerHTML = `
+          <td class="py-3 px-3 text-slate-400 font-bold">#${index + 1}</td>
+          <td class="py-3 px-3 font-sans">
+            <div class="font-medium text-white">${batch.rule_name}</div>
+            <div class="text-[10px] text-slate-400 font-mono">Target: ${batch.target_purity.toFixed(2)}%</div>
+          </td>
+          <td class="py-3 px-3 text-right text-emerald-400 font-bold">
+            ${batch.c.toFixed(3)}g <span class="text-[10px] text-slate-400 font-normal">@${batch.d.toFixed(1)}%</span>
+          </td>
+          <td class="py-3 px-3 text-right text-blue-400 font-bold">
+            ${batch.e.toFixed(3)}g <span class="text-[10px] text-slate-400 font-normal">@${batch.f.toFixed(1)}%</span>
+          </td>
+          <td class="py-3 px-3 text-right font-bold text-white">
+            ${batch.g.toFixed(3)}g
+          </td>
+          <td class="py-3 px-3 text-right font-bold text-amber-400">
+            ${batch.h.toFixed(3)}g
+          </td>
+          <td class="py-3 px-3 text-center">
+            <button 
+              type="button" 
+              onclick="removeBatchFromQueue(${index})" 
+              class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded bg-slate-950 hover:bg-rose-950/40 border border-slate-700 transition"
+              title="Remove batch from queue"
+            >
+              Remove
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      updateAggregation();
+    }
+
+    function updateAggregation() {
+      let totalG = 0;
+      let totalH = 0;
+      let totalC = 0;
+      let totalE = 0;
+      const alloyMetalTotals = {};
+
+      sessionQueue.forEach(b => {
+        totalG += b.g;
+        totalH += b.h;
+        totalC += b.c;
+        totalE += b.e;
+
+        if (b.components && b.components.length > 0) {
+          b.components.forEach(comp => {
+            if (!alloyMetalTotals[comp.metal_id]) {
+              alloyMetalTotals[comp.metal_id] = {
+                metal_id: comp.metal_id,
+                metal_name: comp.metal_name,
+                totalIssued: 0,
+                stock: stocksMap[comp.metal_id] !== undefined ? stocksMap[comp.metal_id] : 0
+              };
+            }
+            alloyMetalTotals[comp.metal_id].totalIssued += comp.issued_weight;
+          });
+        }
+      });
+
+      document.getElementById('aggTotalTargetG').textContent = totalG.toFixed(3) + ' g';
+      document.getElementById('aggTotalAlloyH').textContent = totalH.toFixed(3) + ' g';
+      document.getElementById('aggTotalPureC').textContent = totalC.toFixed(3) + ' g';
+      document.getElementById('aggTotalMetalE').textContent = totalE.toFixed(3) + ' g';
+
+      // Update Alloy consumption list
+      const listContainer = document.getElementById('alloyConsumptionList');
+      listContainer.innerHTML = '';
+
+      const metalKeys = Object.keys(alloyMetalTotals);
+      if (metalKeys.length === 0) {
+        listContainer.innerHTML = '<span class="text-xs text-slate-500 italic">No alloy required yet.</span>';
+        return;
+      }
+
+      metalKeys.forEach(mId => {
+        const item = alloyMetalTotals[mId];
+        const isSufficient = item.stock >= item.totalIssued;
+        const div = document.createElement('div');
+        div.className = 'flex items-center justify-between text-xs font-mono bg-slate-900 px-3 py-2 rounded-lg border border-slate-800';
+        div.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full ${isSufficient ? 'bg-emerald-400' : 'bg-rose-400 animate-pulse'}"></span>
+            <span class="font-bold text-white font-sans">${item.metal_name}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-slate-400">Needed: <strong class="text-amber-400">${item.totalIssued.toFixed(3)}g</strong></span>
+            <span class="text-slate-500">|</span>
+            <span class="text-slate-400">Vault: <strong class="${isSufficient ? 'text-emerald-400' : 'text-rose-400'}">${item.stock.toFixed(3)}g</strong></span>
+            <span class="text-[10px] px-2 py-0.5 rounded font-sans font-bold ${isSufficient ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800'}">
+              ${isSufficient ? 'Covered' : 'DEFICIT'}
+            </span>
+          </div>
+        `;
+        listContainer.appendChild(div);
+      });
+    }
+
+    function submitSessionExecution() {
+      clearAlert();
+
+      // If sessionQueue is empty, stage current calculation automatically!
+      if (sessionQueue.length === 0) {
+        if (!currentCalc) {
+          recalculateBatch();
+        }
+        if (currentCalc && currentCalc.g > 0) {
+          sessionQueue.push(JSON.parse(JSON.stringify(currentCalc)));
+          renderQueue();
+        } else {
+          showAlert('Please configure valid charge parameters with Target Weight (G) > 0 before committing session.', true);
+          return;
+        }
+      }
+
+      const payloadInput = document.getElementById('queueDataPayload');
+      payloadInput.value = JSON.stringify(sessionQueue);
+
+      const btn = document.getElementById('btnCommitSession');
+      btn.disabled = true;
+      btn.classList.add('opacity-75', 'cursor-not-allowed');
+      btn.innerHTML = `
+        <svg class="animate-spin w-4 h-4 text-slate-950 inline mr-2" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Executing Melting Session (${sessionQueue.length} ${sessionQueue.length === 1 ? 'batch' : 'batches'})...</span>
+      `;
+
+      // Guarantee auth token is attached
+      const token = sessionStorage.getItem('alloy_auth_token') || '<%= typeof authToken !== "undefined" ? authToken : "" %>';
+      let authInput = document.querySelector('#commitSessionForm input[name="auth"]');
+      if (!authInput) {
+        authInput = document.createElement('input');
+        authInput.type = 'hidden';
+        authInput.name = 'auth';
+        document.getElementById('commitSessionForm').appendChild(authInput);
+      }
+      if (token) {
+        authInput.value = token;
+      }
+
+      document.getElementById('commitSessionForm').submit();
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      onRuleChange();
+    });
+  </script>
+</body>
+</html>
