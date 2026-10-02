@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email &amp; Daily Reports - Alloy Vault Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans transition-colors">
+  <%- include('partials/navbar') %>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Email &amp; Daily Reports Configuration</h1>
+          <span class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-800">
+            Admin Controlled
+          </span>
+        </div>
+        <p class="text-sm text-slate-400 mt-1">
+          Configure your Gmail or SMTP mail server to send automated end-of-day melting sessions and vault balance reports.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <a 
+          href="<%= authUrl('/admin/users') %>" 
+          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition"
+        >
+          <span>👥 Manage Users</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Feedback messages -->
+    <% if (typeof success !== 'undefined' && success) { %>
+      <div class="mb-6 p-4 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-sm flex items-start gap-3 shadow-lg">
+        <span class="text-lg">✓</span>
+        <div>
+          <div class="font-bold">Success</div>
+          <div class="text-xs mt-0.5"><%= success %></div>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="mb-6 p-4 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-300 text-sm flex items-start gap-3 shadow-lg">
+        <span class="text-lg">⛔</span>
+        <div>
+          <div class="font-bold">Action Failed</div>
+          <div class="text-xs mt-0.5"><%= error %></div>
+        </div>
+      </div>
+    <% } %>
+
+    <!-- Gmail Setup Guide Banner -->
+    <div class="mb-8 p-5 rounded-2xl bg-amber-950/30 border border-amber-800/50 text-amber-200 shadow-md">
+      <div class="flex items-start gap-3.5">
+        <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 text-base font-bold">
+          ✉
+        </div>
+        <div class="space-y-1.5">
+          <h3 class="font-bold text-white text-sm">Gmail Configuration Instructions</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            To connect a Gmail address (<code class="text-amber-400 font-mono">@gmail.com</code>):
+          </p>
+          <ul class="text-xs text-slate-300 list-disc list-inside space-y-1 pl-1">
+            <li>Host: <strong class="text-white font-mono">smtp.gmail.com</strong> &bull; Port: <strong class="text-white font-mono">587</strong> (TLS)</li>
+            <li>Username: Your full Gmail address (e.g. <span class="font-mono text-amber-300">yourname@gmail.com</span>)</li>
+            <li>Password: Use a Google <strong class="text-amber-300">App Password</strong> (generate in your Google Account &rarr; Security &rarr; 2-Step Verification &rarr; App passwords). <em>Standard Gmail passwords are rejected by Google for direct SMTP access.</em></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2-COLUMN GRID: Settings Form / Live Test & Preview -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      
+      <!-- LEFT: Mail Server Settings Form -->
+      <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xl space-y-6">
+        <div class="border-b border-slate-800 pb-4">
+          <h2 class="text-base font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <span>⚙ Mail Server Settings (SMTP)</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">Credentials and dispatch rules stored securely on your server.</p>
+        </div>
+
+        <form action="<%= authUrl('/admin/email-settings') %>" method="POST" class="space-y-5">
+          <input type="hidden" name="auth" value="<%= authToken %>">
+
+          <!-- Host & Port Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="sm:col-span-2">
+              <label for="smtp_host" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                SMTP Host Server <span class="text-rose-400">*</span>
+              </label>
+              <input 
+                type="text" 
+                id="smtp_host" 
+                name="smtp_host" 
+                required 
+                value="<%= settings.smtp_host || 'smtp.gmail.com' %>"
+                placeholder="smtp.gmail.com" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500 transition"
+              />
+            </div>
+
+            <div>
+              <label for="smtp_port" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Port <span class="text-rose-400">*</span>
+              </label>
+              <input 
+                type="number" 
+                id="smtp_port" 
+                name="smtp_port" 
+                required 
+                value="<%= settings.smtp_port || 587 %>"
+                placeholder="587" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500 transition"
+              />
+            </div>
+          </div>
+
+          <!-- SSL Toggle -->
+          <div class="flex items-center gap-2.5 bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <input 
+              type="checkbox" 
+              id="smtp_secure" 
+              name="smtp_secure" 
+              value="true" 
+              <%= settings.smtp_secure ? 'checked' : '' %>
+              class="w-4 h-4 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-amber-500"
+            />
+            <label for="smtp_secure" class="text-xs text-slate-300 cursor-pointer">
+              Use direct SSL/TLS encryption (Check if port is <strong class="text-white font-mono">465</strong>; uncheck for port <strong class="text-white font-mono">587 STARTTLS</strong>)
+            </label>
+          </div>
+
+          <!-- Credentials Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="smtp_user" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Gmail / SMTP Username <span class="text-rose-400">*</span>
+              </label>
+              <input 
+                type="text" 
+                id="smtp_user" 
+                name="smtp_user" 
+                required 
+                value="<%= settings.smtp_user || '' %>"
+                placeholder="e.g. manager@gmail.com" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500 transition"
+              />
+            </div>
+
+            <div>
+              <label for="smtp_pass" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                App Password / Password <span class="text-rose-400">*</span>
+              </label>
+              <div class="relative">
+                <input 
+                  type="password" 
+                  id="smtp_pass" 
+                  name="smtp_pass" 
+                  value="<%= settings.smtp_pass || '' %>"
+                  placeholder="16-character App Password" 
+                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 pr-10 text-xs text-white font-mono focus:outline-none focus:border-amber-500 transition"
+                />
+                <button 
+                  type="button" 
+                  onclick="togglePasswordVisibility()" 
+                  class="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-slate-400 hover:text-white"
+                  title="Toggle password visibility"
+                >
+                  👁
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sender Name -->
+          <div>
+            <label for="sender_name" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              Sender Display Name
+            </label>
+            <input 
+              type="text" 
+              id="sender_name" 
+              name="sender_name" 
+              value="<%= settings.sender_name || 'Alloy Vault Ledger' %>"
+              placeholder="e.g. Apex Precious Metals Vault" 
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 transition"
+            />
+          </div>
+
+          <!-- Recipients List -->
+          <div>
+            <label for="recipient_emails" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              Daily Report Recipients <span class="text-rose-400">*</span>
+            </label>
+            <textarea 
+              id="recipient_emails" 
+              name="recipient_emails" 
+              rows="2"
+              required
+              placeholder="e.g. erpaufinja@gmail.com, factory.manager@example.com" 
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500 transition"
+            ><%= settings.recipient_emails || '' %></textarea>
+            <p class="text-[11px] text-slate-500 mt-1">Separate multiple email addresses with commas.</p>
+          </div>
+
+          <!-- Schedule Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+            <div>
+              <label for="scheduled_time" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Daily Dispatch Time (24h) <span class="text-rose-400">*</span>
+              </label>
+              <input 
+                type="time" 
+                id="scheduled_time" 
+                name="scheduled_time" 
+                required 
+                value="<%= settings.scheduled_time || '18:00' %>"
+                class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-amber-500 transition"
+              />
+              <p class="text-[11px] text-slate-500 mt-1">Server clock time for automated dispatch (e.g. 18:00 for 6:00 PM).</p>
+            </div>
+
+            <div class="flex flex-col justify-center">
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                Automated Schedule Status
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  name="daily_report_enabled" 
+                  value="true" 
+                  <%= settings.daily_report_enabled ? 'checked' : '' %>
+                  class="w-4 h-4 rounded text-emerald-500 bg-slate-900 border-slate-700 focus:ring-emerald-500"
+                />
+                <span class="text-xs font-bold <%= settings.daily_report_enabled ? 'text-emerald-400' : 'text-slate-400' %>">
+                  <%= settings.daily_report_enabled ? 'Active (Automated Dispatch On)' : 'Paused (Disabled)' %>
+                </span>
+              </label>
+              <% if (settings.last_sent_at) { %>
+                <span class="text-[11px] text-slate-500 mt-1.5 font-mono">
+                  Last Sent: <%= new Date(settings.last_sent_at).toLocaleString() %>
+                </span>
+              <% } else { %>
+                <span class="text-[11px] text-slate-500 mt-1.5 font-mono">
+                  Last Sent: Never
+                </span>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="pt-2 flex items-center justify-end">
+            <button 
+              type="submit" 
+              class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-sm font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition"
+            >
+              Save Email Configuration
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- RIGHT: Test Connection & Immediate Dispatch Actions -->
+      <div class="lg:col-span-5 space-y-6">
+        
+        <!-- Live Action Card: Test Connection -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div class="border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <span>🧪 Verify SMTP Connection</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">Send a quick test message to verify credentials and TLS handshakes.</p>
+          </div>
+
+          <form action="<%= authUrl('/admin/email-settings/test') %>" method="POST" class="space-y-3">
+            <input type="hidden" name="auth" value="<%= authToken %>">
+            <div>
+              <label for="test_email_recipient" class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                Recipient Email
+              </label>
+              <input 
+                type="email" 
+                id="test_email_recipient" 
+                name="test_email_recipient" 
+                required 
+                value="<%= (settings.recipient_emails || '').split(',')[0].trim() || settings.smtp_user || '' %>"
+                placeholder="Enter destination email" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500 transition"
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              class="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 hover:border-amber-500/50 shadow-sm transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>📨 Send Test Email Now</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Live Action Card: Send Today's Daily Report Now -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div class="border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <span>🚀 Manual Daily Report Dispatch</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Generate today's complete end-of-day summary and dispatch immediately to all configured recipients.
+            </p>
+          </div>
+
+          <form action="<%= authUrl('/admin/email-settings/send-daily-now') %>" method="POST">
+            <input type="hidden" name="auth" value="<%= authToken %>">
+            <p class="text-xs text-slate-300 leading-relaxed mb-4">
+              This will calculate all melting sessions, total pure metals, alloy additives issued today, and current vault balances from the live ledger, then email the report immediately.
+            </p>
+            <button 
+              type="submit" 
+              class="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/20 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>📊 Send Today's EOD Report Now</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Report Content Preview Structure -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
+          <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+            <span>📋 Report Structure Included in Email</span>
+          </h4>
+          <div class="space-y-2 text-xs text-slate-400">
+            <div class="flex items-center gap-2">
+              <span class="text-amber-400">&bull;</span>
+              <span><strong>Crucible Melting Sessions:</strong> Session count, total output ($G$), and alloy issued ($H$).</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-amber-400">&bull;</span>
+              <span><strong>Metals &amp; Alloys Used Today:</strong> Itemized breakdown of constituent weights consumed.</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-amber-400">&bull;</span>
+              <span><strong>Closing Vault Balances:</strong> Live inventory balance of all metals and alloys at end of day.</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <%- include('partials/footer') %>
+
+  <script>
+    function togglePasswordVisibility() {
+      const pass = document.getElementById('smtp_pass');
+      pass.type = pass.type === 'password' ? 'text' : 'password';
+    }
+  </script>
+</body>
+</html>

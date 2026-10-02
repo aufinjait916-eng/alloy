@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login - Alloy &amp; Melting Inventory Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <%- include('partials/theme_head') %>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950 font-sans">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950 font-sans transition-colors">
 
   <!-- Header Branding -->
   <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur-md px-6 py-4">
@@ -20,9 +21,25 @@
           <p class="text-xs text-slate-400 font-mono">Vault System</p>
         </div>
       </div>
-      <div class="flex items-center gap-2 text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-3 py-1 rounded-full">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span>Secure Vault Portal</span>
+      <div class="flex items-center gap-3">
+        <button 
+          type="button" 
+          id="themeToggleBtnLogin"
+          onclick="toggleLoginTheme()" 
+          title="Toggle Light / Dark Mode"
+          class="p-2 rounded-xl text-slate-400 hover:text-amber-400 hover:bg-slate-800/80 border border-transparent hover:border-slate-700 transition flex items-center justify-center cursor-pointer"
+        >
+          <svg id="loginSunIcon" class="w-4 h-4 hidden text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <svg id="loginMoonIcon" class="w-4 h-4 hidden text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        </button>
+        <div class="flex items-center gap-2 text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-3 py-1 rounded-full">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Secure Vault Portal</span>
+        </div>
       </div>
     </div>
   </header>
@@ -119,5 +136,42 @@
     Alloy &amp; Melting Inventory Manager &bull; Pure Node.js WebApp
   </footer>
 
+  <script>
+    function updateLoginThemeIcons() {
+      const isDark = document.documentElement.classList.contains('dark');
+      const sun = document.getElementById('loginSunIcon');
+      const moon = document.getElementById('loginMoonIcon');
+      if (sun && moon) {
+        if (isDark) {
+          sun.classList.remove('hidden');
+          moon.classList.add('hidden');
+        } else {
+          sun.classList.add('hidden');
+          moon.classList.remove('hidden');
+        }
+      }
+    }
+
+    function toggleLoginTheme() {
+      const isDark = document.documentElement.classList.contains('dark');
+      const nextTheme = isDark ? 'light' : 'dark';
+      if (nextTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+      }
+      try { localStorage.setItem('vault_theme', nextTheme); } catch(e){}
+      updateLoginThemeIcons();
+    }
+
+    try {
+      sessionStorage.removeItem('alloy_auth_token');
+      localStorage.removeItem('alloy_auth_token');
+    } catch(e) {}
+
+    document.addEventListener('DOMContentLoaded', updateLoginThemeIcons);
+  </script>
 </body>
 </html>

@@ -41,6 +41,31 @@
       <div id="calcAlertText"></div>
     </div>
 
+    <!-- Duplicate Session Banner -->
+    <% if (typeof duplicateSession !== 'undefined' && duplicateSession && duplicateSession.batches && duplicateSession.batches.length > 0) { %>
+      <div class="mb-6 p-4 rounded-2xl bg-blue-950/70 border border-blue-600/80 text-blue-200 flex items-center justify-between gap-4 shadow-xl">
+        <div class="flex items-center gap-3">
+          <div class="p-2 rounded-xl bg-blue-900/60 border border-blue-700/60 text-blue-300 text-lg">
+            📋
+          </div>
+          <div>
+            <div class="font-bold text-white text-sm flex items-center gap-2">
+              <span>Duplicating Melting Session #<%= duplicateSession.session_id %></span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-900 border border-blue-700 text-blue-300 font-mono">
+                <%= duplicateSession.batches.length %> <%= duplicateSession.batches.length === 1 ? 'charge' : 'charges' %>
+              </span>
+            </div>
+            <p class="text-xs text-blue-300/90 mt-0.5">
+              Exact charge parameters have been loaded from Session #<%= duplicateSession.session_id %>. Please review the values and confirm the melting execution below.
+            </p>
+          </div>
+        </div>
+        <a href="<%= authUrl('/melting/prepare') %>" class="text-xs text-blue-300 hover:text-white bg-blue-900/60 hover:bg-blue-900 px-3 py-1.5 rounded-lg border border-blue-700/60 transition whitespace-nowrap">
+          Clear &amp; Start Fresh
+        </a>
+      </div>
+    <% } %>
+
     <!-- 2-COLUMN WORKSPACE: LEFT (Calculator & Rule Inputs) / RIGHT (Active Batch Queue & Aggregation) -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
       
@@ -121,7 +146,8 @@
                   step="0.001" 
                   min="0.000" 
                   id="inputC" 
-                  value="300.000" 
+                  value="" 
+                  placeholder="0.000"
                   oninput="recalculateBatch()"
                   class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
                 />
@@ -134,7 +160,8 @@
                   min="0.01" 
                   max="100.00" 
                   id="inputD" 
-                  value="99.90" 
+                  value="" 
+                  placeholder="e.g. 99.90"
                   oninput="recalculateBatch()"
                   class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
                 />
@@ -161,7 +188,8 @@
                   step="0.001" 
                   min="0.000" 
                   id="inputE" 
-                  value="75.000" 
+                  value="" 
+                  placeholder="0.000"
                   oninput="recalculateBatch()"
                   class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
                 />
@@ -174,7 +202,8 @@
                   min="0.00" 
                   max="100.00" 
                   id="inputF" 
-                  value="68.00" 
+                  value="" 
+                  placeholder="e.g. 75.00"
                   oninput="recalculateBatch()"
                   class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
                 />
@@ -197,31 +226,31 @@
             <div class="text-[11px] text-slate-400 space-y-1 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
               <div class="flex justify-between">
                 <span>Pure from C (C &times; D/100):</span>
-                <span id="resPureFromC" class="font-bold text-emerald-400">299.700 g</span>
+                <span id="resPureFromC" class="font-bold text-emerald-400">0.000 g</span>
               </div>
               <div class="flex justify-between">
                 <span>Pure from E (E &times; F/100):</span>
-                <span id="resPureFromE" class="font-bold text-blue-400">51.000 g</span>
+                <span id="resPureFromE" class="font-bold text-blue-400">0.000 g</span>
               </div>
               <div class="flex justify-between pt-1 border-t border-slate-800/80 font-bold text-slate-200">
                 <span>Total Pure Metal Content:</span>
-                <span id="resTotalPure">350.700 g</span>
+                <span id="resTotalPure">0.000 g</span>
               </div>
             </div>
 
             <div class="flex justify-between items-center pt-1">
               <span class="text-slate-300 font-semibold">Target Weight (G):</span>
-              <span id="resTargetG" class="text-base font-bold text-white font-mono">467.600 g</span>
+              <span id="resTargetG" class="text-base font-bold text-white font-mono">0.000 g</span>
             </div>
 
             <div class="flex justify-between items-center">
               <span class="text-amber-300 font-semibold">Required Alloy [G - (C + E)]:</span>
-              <span id="resAlloyH" class="text-base font-bold text-amber-400 font-mono">92.600 g</span>
+              <span id="resAlloyH" class="text-base font-bold text-amber-400 font-mono">0.000 g</span>
             </div>
 
             <!-- Component Breakdown Preview -->
             <div class="pt-2 border-t border-slate-800 space-y-1.5" id="componentBreakdownPreview">
-              <!-- Dynamically generated rows -->
+              <span class="text-[11px] text-slate-500 italic">Enter weight and purity above to compute alloy allocations.</span>
             </div>
           </div>
 
@@ -372,7 +401,7 @@
       return rulesData.find(r => r.rule_id === ruleId) || rulesData[0];
     }
 
-    function onRuleChange() {
+    function onRuleChange(autoRecalc = true) {
       const rule = getSelectedRule();
       if (!rule) return;
 
@@ -402,7 +431,6 @@
       const eInd = document.getElementById('eComputedIndicator');
       const inputC = document.getElementById('inputC');
       const inputE = document.getElementById('inputE');
-      const inputF = document.getElementById('inputF');
       const noneBanner = document.getElementById('noneModeBanner');
       const formulaBadge = document.getElementById('formulaBadge');
 
@@ -419,15 +447,6 @@
         inputC.classList.remove('bg-slate-950', 'text-slate-400');
         inputE.readOnly = false;
         inputE.classList.remove('bg-slate-950', 'text-slate-400');
-
-        // If current F is outside range [pMin, pMax], pre-fill with a valid value within the range
-        const pMin = Number(rule.purity_min);
-        const pMax = Number(rule.purity_max);
-        const curF = parseFloat(inputF.value) || 0;
-        if (curF < pMin || curF > pMax) {
-          const mid = (pMin + pMax) / 2;
-          inputF.value = mid.toFixed(2);
-        }
       } else if (isE) {
         if (noneBanner) noneBanner.classList.add('hidden');
         if (formulaBadge) {
@@ -454,7 +473,9 @@
         inputE.classList.remove('bg-slate-950', 'text-slate-400');
       }
 
-      recalculateBatch();
+      if (autoRecalc) {
+        recalculateBatch();
+      }
     }
 
     function showAlert(msg, isError = true) {
@@ -462,12 +483,12 @@
       const icon = document.getElementById('calcAlertIcon');
       const text = document.getElementById('calcAlertText');
 
-      box.classList.remove('hidden', 'bg-rose-950/80', 'border-rose-800', 'text-rose-300', 'bg-emerald-950/80', 'border-emerald-800', 'text-emerald-300');
+      box.classList.remove('hidden', 'bg-rose-950/80', 'border-rose-800', 'text-rose-300', 'bg-emerald-950/80', 'border-emerald-800', 'text-emerald-300', 'bg-blue-950/80', 'border-blue-800', 'text-blue-300');
       if (isError) {
         box.classList.add('bg-rose-950/80', 'border', 'border-rose-800', 'text-rose-300');
         icon.textContent = '⛔';
       } else {
-        box.classList.add('bg-emerald-950/80', 'border', 'border-emerald-800', 'text-emerald-300');
+        box.classList.add('bg-blue-950/80', 'border', 'border-blue-800', 'text-blue-300');
         icon.textContent = 'ℹ️';
       }
       text.innerHTML = msg;
@@ -487,13 +508,31 @@
       const inputE = document.getElementById('inputE');
       const inputF = document.getElementById('inputF');
 
-      let c = parseFloat(inputC.value) || 0;
-      let d = parseFloat(inputD.value) || 0;
-      let e = parseFloat(inputE.value) || 0;
-      let f = parseFloat(inputF.value) || 0;
+      const rawC = inputC.value.trim();
+      const rawD = inputD.value.trim();
+      const rawE = inputE.value.trim();
+      const rawF = inputF.value.trim();
+
+      // If inputs are blank, show clear/zero outputs without validation alerts
+      if (rawC === '' && rawE === '') {
+        document.getElementById('resPureFromC').textContent = '0.000 g';
+        document.getElementById('resPureFromE').textContent = '0.000 g';
+        document.getElementById('resTotalPure').textContent = '0.000 g';
+        document.getElementById('resTargetG').textContent = '0.000 g';
+        const alloyEl = document.getElementById('resAlloyH');
+        alloyEl.textContent = '0.000 g';
+        alloyEl.className = 'font-bold text-amber-400';
+        document.getElementById('componentBreakdownPreview').innerHTML = '<span class="text-[11px] text-slate-500 italic">Enter weight and purity above to compute alloy allocations.</span>';
+        currentCalc = null;
+        return;
+      }
+
+      let c = rawC !== '' ? parseFloat(rawC) || 0 : 0;
+      let d = rawD !== '' ? parseFloat(rawD) || 0 : 0;
+      let e = rawE !== '' ? parseFloat(rawE) || 0 : 0;
+      let f = rawF !== '' ? parseFloat(rawF) || 0 : 0;
 
       // Ratio multiplier is taken in percentage (e.g. 142.86 is 1.4286 ratio)
-      // Consider calculation to be divided by 100 as this is a percentage
       const ratio = Number(rule.compute_percentage) / 100;
       const targetPurity = Number(rule.target_purity);
       const pMin = Number(rule.purity_min);
@@ -501,23 +540,27 @@
 
       // Perform dynamic computation based on compute_parameter
       if (rule.compute_parameter === 'E') {
-        e = Math.round(c * ratio * 1000) / 1000;
-        inputE.value = e.toFixed(3);
-        if (f < pMin || f > pMax) {
+        if (rawC !== '') {
+          e = Math.round(c * ratio * 1000) / 1000;
+          inputE.value = e.toFixed(3);
+        }
+        if (rawF !== '' && (f < pMin || f > pMax)) {
           showAlert(`Validation: Metal Purity (F: ${f.toFixed(2)}%) is outside allowed rule range [${pMin.toFixed(2)}% - ${pMax.toFixed(2)}%].`, true);
         }
       } else if (rule.compute_parameter === 'C') {
-        c = Math.round(e * ratio * 1000) / 1000;
-        inputC.value = c.toFixed(3);
-        if (d < pMin || d > pMax) {
+        if (rawE !== '') {
+          c = Math.round(e * ratio * 1000) / 1000;
+          inputC.value = c.toFixed(3);
+        }
+        if (rawD !== '' && (d < pMin || d > pMax)) {
           showAlert(`Validation: Pure Purity (D: ${d.toFixed(2)}%) is outside allowed rule range [${pMin.toFixed(2)}% - ${pMax.toFixed(2)}%].`, true);
         }
       } else {
         // compute_parameter === 'None'
         // Direct conversion on the weight and purity entered by the user to convert into target purity
-        if (e > 0 && (f < pMin || f > pMax)) {
+        if (rawE !== '' && rawF !== '' && (f < pMin || f > pMax)) {
           showAlert(`Validation: Entered Metal Purity (F: ${f.toFixed(2)}%) is outside allowed rule range [${pMin.toFixed(2)}% - ${pMax.toFixed(2)}%].`, true);
-        } else if (c > 0 && e === 0 && (d < pMin || d > pMax) && pMin > 0) {
+        } else if (rawC !== '' && rawE === '' && rawD !== '' && (d < pMin || d > pMax) && pMin > 0) {
           showAlert(`Validation: Entered Pure Purity (D: ${d.toFixed(2)}%) is outside allowed rule range [${pMin.toFixed(2)}% - ${pMax.toFixed(2)}%].`, true);
         }
       }
@@ -542,9 +585,9 @@
       // Required Alloy to be evaluated like this: G - (C + E)
       let h = Math.round((g - (c + e)) * 1000) / 1000;
 
+      // Requirement 2: allow negative alloy calculation if metal purity is lower than target purity
       if (h < 0 && (c > 0 || e > 0)) {
-        showAlert(`Validation Notice: The entered purity is below Target Purity (${targetPurity.toFixed(2)}%). Adding alloy only lowers purity. Please increase pure metal (C) to enrich the melt or adjust target purity.`, true);
-        h = 0;
+        showAlert(`Notice: Entered metal purity is lower than Target Purity (${targetPurity.toFixed(2)}%). Required alloy calculation is negative (${h.toFixed(3)} g), indicating a pure metal deficit.`, false);
       }
 
       // Update UI metric outputs
@@ -552,7 +595,14 @@
       document.getElementById('resPureFromE').textContent = pureFromE.toFixed(3) + ' g';
       document.getElementById('resTotalPure').textContent = totalPure.toFixed(3) + ' g';
       document.getElementById('resTargetG').textContent = g.toFixed(3) + ' g';
-      document.getElementById('resAlloyH').textContent = h.toFixed(3) + ' g';
+
+      const alloyEl = document.getElementById('resAlloyH');
+      alloyEl.textContent = h.toFixed(3) + ' g';
+      if (h < 0) {
+        alloyEl.className = 'font-bold text-rose-400';
+      } else {
+        alloyEl.className = 'font-bold text-amber-400';
+      }
 
       // Compute component breakdown for H
       const previewContainer = document.getElementById('componentBreakdownPreview');
@@ -564,7 +614,7 @@
         rule.components.forEach(comp => {
           const compWeight = Math.round(h * Number(comp.percentage) * 1000) / 1000;
           const currentVaultStock = stocksMap[comp.metal_id] !== undefined ? stocksMap[comp.metal_id] : 0;
-          const hasStock = currentVaultStock >= compWeight;
+          const hasStock = compWeight <= 0 || currentVaultStock >= compWeight;
 
           componentAllocations.push({
             metal_id: comp.metal_id,
@@ -582,9 +632,9 @@
               &bull; ${comp.metal_name} (${(Number(comp.percentage)*100).toFixed(0)}%):
             </span>
             <div class="flex items-center gap-2">
-              <span class="font-mono font-bold text-amber-300">${compWeight.toFixed(3)} g</span>
-              <span class="text-[9px] px-1.5 py-0.2 rounded font-sans ${hasStock ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800'}">
-                ${hasStock ? 'In Stock' : 'Low Stock'}
+              <span class="font-mono font-bold ${compWeight < 0 ? 'text-rose-400' : 'text-amber-300'}">${compWeight.toFixed(3)} g</span>
+              <span class="text-[9px] px-1.5 py-0.2 rounded font-sans ${compWeight < 0 ? 'bg-rose-950 text-rose-300 border border-rose-800' : (hasStock ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800')}">
+                ${compWeight < 0 ? 'Negative (Deficit)' : (hasStock ? 'In Stock' : 'Low Stock')}
               </span>
             </div>
           `;
@@ -620,6 +670,21 @@
       sessionQueue.push(JSON.parse(JSON.stringify(currentCalc)));
       renderQueue();
       showAlert(`✓ Batch #${sessionQueue.length} added to session queue (${currentCalc.rule_name} - ${currentCalc.g.toFixed(3)}g). Click "Commit & Execute" below to process.`, false);
+
+      // Requirement 1: Clear input fields on adding calculated batch to queue
+      document.getElementById('inputC').value = '';
+      document.getElementById('inputD').value = '';
+      document.getElementById('inputE').value = '';
+      document.getElementById('inputF').value = '';
+      currentCalc = null;
+      document.getElementById('resPureFromC').textContent = '0.000 g';
+      document.getElementById('resPureFromE').textContent = '0.000 g';
+      document.getElementById('resTotalPure').textContent = '0.000 g';
+      document.getElementById('resTargetG').textContent = '0.000 g';
+      const alloyEl = document.getElementById('resAlloyH');
+      alloyEl.textContent = '0.000 g';
+      alloyEl.className = 'font-bold text-amber-400';
+      document.getElementById('componentBreakdownPreview').innerHTML = '<span class="text-[11px] text-slate-500 italic">Batch staged to queue. Enter next batch parameters or commit session.</span>';
     }
 
     function removeBatchFromQueue(index) {
@@ -685,7 +750,7 @@
           <td class="py-3 px-3 text-right font-bold text-white">
             ${batch.g.toFixed(3)}g
           </td>
-          <td class="py-3 px-3 text-right font-bold text-amber-400">
+          <td class="py-3 px-3 text-right font-bold ${batch.h < 0 ? 'text-rose-400' : 'text-amber-400'}">
             ${batch.h.toFixed(3)}g
           </td>
           <td class="py-3 px-3 text-center">
@@ -734,7 +799,13 @@
       });
 
       document.getElementById('aggTotalTargetG').textContent = totalG.toFixed(3) + ' g';
-      document.getElementById('aggTotalAlloyH').textContent = totalH.toFixed(3) + ' g';
+      const aggH = document.getElementById('aggTotalAlloyH');
+      aggH.textContent = totalH.toFixed(3) + ' g';
+      if (totalH < 0) {
+        aggH.className = 'font-bold text-rose-400';
+      } else {
+        aggH.className = 'font-bold text-amber-400';
+      }
       document.getElementById('aggTotalPureC').textContent = totalC.toFixed(3) + ' g';
       document.getElementById('aggTotalMetalE').textContent = totalE.toFixed(3) + ' g';
 
@@ -750,7 +821,7 @@
 
       metalKeys.forEach(mId => {
         const item = alloyMetalTotals[mId];
-        const isSufficient = item.stock >= item.totalIssued;
+        const isSufficient = item.totalIssued <= 0 || item.stock >= item.totalIssued;
         const div = document.createElement('div');
         div.className = 'flex items-center justify-between text-xs font-mono bg-slate-900 px-3 py-2 rounded-lg border border-slate-800';
         div.innerHTML = `
@@ -759,11 +830,11 @@
             <span class="font-bold text-white font-sans">${item.metal_name}</span>
           </div>
           <div class="flex items-center gap-3">
-            <span class="text-slate-400">Needed: <strong class="text-amber-400">${item.totalIssued.toFixed(3)}g</strong></span>
+            <span class="text-slate-400">Needed: <strong class="${item.totalIssued < 0 ? 'text-rose-400' : 'text-amber-400'}">${item.totalIssued.toFixed(3)}g</strong></span>
             <span class="text-slate-500">|</span>
             <span class="text-slate-400">Vault: <strong class="${isSufficient ? 'text-emerald-400' : 'text-rose-400'}">${item.stock.toFixed(3)}g</strong></span>
-            <span class="text-[10px] px-2 py-0.5 rounded font-sans font-bold ${isSufficient ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800'}">
-              ${isSufficient ? 'Covered' : 'DEFICIT'}
+            <span class="text-[10px] px-2 py-0.5 rounded font-sans font-bold ${item.totalIssued < 0 ? 'bg-rose-950 text-rose-300 border border-rose-800' : (isSufficient ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800')}">
+              ${item.totalIssued < 0 ? 'Deficit' : (isSufficient ? 'Covered' : 'DEFICIT')}
             </span>
           </div>
         `;
@@ -818,9 +889,72 @@
       document.getElementById('commitSessionForm').submit();
     }
 
+    const duplicateSessionData = <%- JSON.stringify(typeof duplicateSession !== 'undefined' && duplicateSession ? duplicateSession : null) %>;
+
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
-      onRuleChange();
+      if (duplicateSessionData && duplicateSessionData.batches && duplicateSessionData.batches.length > 0) {
+        const firstBatch = duplicateSessionData.batches[0];
+        
+        // Select rule of the first batch
+        const ruleSelect = document.getElementById('ruleSelect');
+        if (firstBatch.rule_id) {
+          ruleSelect.value = firstBatch.rule_id;
+        }
+        onRuleChange(false);
+
+        // Fill exact values into form inputs
+        document.getElementById('inputC').value = firstBatch.c > 0 ? firstBatch.c.toFixed(3) : '';
+        document.getElementById('inputD').value = firstBatch.d > 0 ? firstBatch.d.toFixed(2) : '';
+        document.getElementById('inputE').value = firstBatch.e > 0 ? firstBatch.e.toFixed(3) : '';
+        document.getElementById('inputF').value = firstBatch.f > 0 ? firstBatch.f.toFixed(2) : '';
+
+        // If duplicateSession has multiple batches, queue all of them!
+        if (duplicateSessionData.batches.length > 1) {
+          duplicateSessionData.batches.forEach(b => {
+            const ruleObj = rulesData.find(r => r.rule_id === b.rule_id) || rulesData[0];
+            const compAllocations = [];
+            if (ruleObj.components) {
+              ruleObj.components.forEach(comp => {
+                const compWeight = Math.round(b.h * Number(comp.percentage) * 1000) / 1000;
+                compAllocations.push({
+                  metal_id: comp.metal_id,
+                  metal_name: comp.metal_name,
+                  percentage: Number(comp.percentage),
+                  issued_weight: compWeight,
+                  currentVaultStock: stocksMap[comp.metal_id] || 0,
+                  hasStock: compWeight <= 0 || (stocksMap[comp.metal_id] || 0) >= compWeight
+                });
+              });
+            }
+            sessionQueue.push({
+              rule_id: b.rule_id,
+              rule_name: b.rule_name || ruleObj.scenario_name,
+              target_purity: b.target_purity,
+              c: b.c,
+              d: b.d,
+              e: b.e,
+              f: b.f,
+              g: b.g,
+              h: b.h,
+              components: compAllocations
+            });
+          });
+          renderQueue();
+          showAlert(`✓ Loaded ${duplicateSessionData.batches.length} charges from duplicated Session #${duplicateSessionData.session_id}. Review parameters and click "Commit & Execute Melting Session" to confirm.`, false);
+        } else {
+          recalculateBatch();
+          showAlert(`✓ Loaded exact charge parameters from duplicated Session #${duplicateSessionData.session_id}. Review parameters and click "Commit & Execute Melting Session" to confirm.`, false);
+        }
+      } else {
+        // Clear all inputs on fresh prepare melting form
+        document.getElementById('inputC').value = '';
+        document.getElementById('inputD').value = '';
+        document.getElementById('inputE').value = '';
+        document.getElementById('inputF').value = '';
+        onRuleChange(false);
+        recalculateBatch();
+      }
     });
   </script>
 </body>

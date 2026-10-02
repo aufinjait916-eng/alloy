@@ -1,5 +1,6 @@
+<%- include('theme_head') %>
 <!-- Top Navigation Bar -->
-<header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40">
+<header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40 transition-colors">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between h-16">
       
@@ -59,9 +60,17 @@
           <% if (currentUser && currentUser.role === 'Admin') { %>
             <a 
               href="<%= authUrl('/admin/users') %>" 
-              class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition <%= path.startsWith('/admin') ? 'bg-purple-950 text-purple-300 border border-purple-700 shadow-sm' : 'text-purple-300 hover:text-white hover:bg-purple-950/50' %>"
+              class="nav-btn-users px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 <%= path === '/admin/users' ? 'active' : '' %>"
             >
-              Admin Panel
+              <span>⚙</span>
+              <span>Users</span>
+            </a>
+            <a 
+              href="<%= authUrl('/admin/email-settings') %>" 
+              class="nav-btn-email px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 <%= path.startsWith('/admin/email') ? 'active' : '' %>"
+            >
+              <span>📧</span>
+              <span>Email</span>
             </a>
           <% } %>
         </nav>
@@ -92,15 +101,23 @@
           </a>
         <% } %>
 
-        <% if (currentUser && currentUser.role === 'Admin') { %>
-          <a 
-            href="<%= authUrl('/admin/users') %>" 
-            class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/80 shadow-md transition active:scale-95"
-          >
-            <span>⚙</span>
-            <span>Admin Users</span>
-          </a>
-        <% } %>
+        <!-- Theme Toggle Button (Light / Dark Mode) -->
+        <button 
+          type="button" 
+          id="themeToggleBtn"
+          onclick="toggleThemeMode()" 
+          title="Toggle Light / Dark Mode"
+          class="p-2 rounded-xl text-slate-400 hover:text-amber-400 hover:bg-slate-800/80 border border-transparent hover:border-slate-700 transition flex items-center justify-center cursor-pointer"
+        >
+          <!-- Sun Icon (shown when in dark mode to switch to light) -->
+          <svg id="themeIconSun" class="w-4 h-4 hidden text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <!-- Moon Icon (shown when in light mode to switch to dark) -->
+          <svg id="themeIconMoon" class="w-4 h-4 hidden text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        </button>
 
         <!-- User Role Badge -->
         <% if (currentUser) { %>
@@ -171,8 +188,11 @@
       Sessions
     </a>
     <% if (currentUser && currentUser.role === 'Admin') { %>
-      <a href="<%= authUrl('/admin/users') %>" class="<%= path.startsWith('/admin') ? 'text-purple-300 font-bold' : 'text-slate-400' %>">
-        ⚙ Admin
+      <a href="<%= authUrl('/admin/users') %>" class="nav-btn-users px-2 py-0.5 rounded text-xs font-semibold <%= path === '/admin/users' ? 'active' : '' %>">
+        ⚙ Users
+      </a>
+      <a href="<%= authUrl('/admin/email-settings') %>" class="nav-btn-email px-2 py-0.5 rounded text-xs font-semibold <%= path.startsWith('/admin/email') ? 'active' : '' %>">
+        📧 Email
       </a>
     <% } %>
     <% if (currentUser && currentUser.role === 'FactoryManager') { %>
@@ -188,9 +208,40 @@
     <% } %>
   </div>
 
-  <!-- Automated Auth Token Bridge for IFrame Cookie Partitioning / Safari / Incognito -->
+  <!-- Client Theme & Auth Token Bridge -->
   <script>
+    function updateThemeIcons() {
+      const isDark = document.documentElement.classList.contains('dark');
+      const sun = document.getElementById('themeIconSun');
+      const moon = document.getElementById('themeIconMoon');
+      if (sun && moon) {
+        if (isDark) {
+          sun.classList.remove('hidden');
+          moon.classList.add('hidden');
+        } else {
+          sun.classList.add('hidden');
+          moon.classList.remove('hidden');
+        }
+      }
+    }
+
+    function toggleThemeMode() {
+      const isDark = document.documentElement.classList.contains('dark');
+      const nextTheme = isDark ? 'light' : 'dark';
+      if (nextTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+      }
+      try { localStorage.setItem('vault_theme', nextTheme); } catch(e){}
+      updateThemeIcons();
+    }
+
     (function() {
+      updateThemeIcons();
+
       const serverToken = '<%= typeof authToken !== "undefined" ? authToken : "" %>';
       const urlParams = new URLSearchParams(window.location.search);
       const urlToken = urlParams.get('auth');

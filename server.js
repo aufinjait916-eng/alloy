@@ -15,6 +15,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -177,6 +178,19 @@ class InMemoryLedger {
     this.nextSessionId = 2;
     this.nextMeltingId = 2;
     this.nextDetailId = 3;
+    this.email_settings = {
+      setting_id: 1,
+      smtp_host: 'smtp.gmail.com',
+      smtp_port: 587,
+      smtp_secure: false,
+      smtp_user: '',
+      smtp_pass: '',
+      sender_name: 'Alloy Vault Ledger',
+      recipient_emails: '',
+      daily_report_enabled: false,
+      scheduled_time: '18:00',
+      last_sent_at: null
+    };
   }
 
   getCurrentStockView() {
@@ -474,6 +488,30 @@ async function initDatabase() {
         );
         console.log(`[Database] Synchronized administrator "${ADMIN_USERNAME}" credentials with ADMIN_PASSWORD environment variable.`);
       }
+
+      // Ensure email_settings table exists
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS email_settings (
+          setting_id INT PRIMARY KEY DEFAULT 1,
+          smtp_host VARCHAR(255) DEFAULT 'smtp.gmail.com',
+          smtp_port INT DEFAULT 587,
+          smtp_secure BOOLEAN DEFAULT FALSE,
+          smtp_user VARCHAR(255) DEFAULT '',
+          smtp_pass VARCHAR(255) DEFAULT '',
+          sender_name VARCHAR(255) DEFAULT 'Alloy Vault Ledger',
+          recipient_emails TEXT DEFAULT '',
+          daily_report_enabled BOOLEAN DEFAULT FALSE,
+          scheduled_time VARCHAR(10) DEFAULT '18:00',
+          last_sent_at TIMESTAMP WITH TIME ZONE NULL
+        );
+      `);
+      const existingSettings = await pool.query('SELECT * FROM email_settings WHERE setting_id = 1');
+      if (existingSettings.rows.length === 0) {
+        await pool.query(`
+          INSERT INTO email_settings (setting_id, smtp_host, smtp_port, smtp_secure, sender_name, scheduled_time)
+          VALUES (1, 'smtp.gmail.com', 587, FALSE, 'Alloy Vault Ledger', '18:00')
+        `);
+      }
     } catch (e) {
       console.warn('[Database] Note on admin synchronization:', e.message);
     }
@@ -497,7 +535,17 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Configure Session Management with iframe-friendly cookie options
+// Determine cookie settings for session:
+// - In Cloud Run / iframe preview environments, use sameSite: 'none' and secure: true.
+// - In self-hosted production/on-prem environments (HTTP or HTTPS directly in browser),
+//   use secure: 'auto' (true over HTTPS, false over HTTP) and sameSite: 'lax'.
+const isCloudRunPreview = Boolean(process.env.K_SERVICE || process.env.CLOUD_RUN_JOB || process.env.AIS_ENV);
+const cookieSecureConfig = process.env.COOKIE_SECURE !== undefined 
+  ? process.env.COOKIE_SECURE === 'true' 
+  : (isCloudRunPreview ? true : 'auto');
+const cookieSameSiteConfig = process.env.COOKIE_SAMESITE || (isCloudRunPreview ? 'none' : 'lax');
+
+// Configure Session Management
 const sessionOptions = {
   secret: SESSION_SECRET,
   resave: false,
@@ -506,8 +554,8 @@ const sessionOptions = {
   cookie: {
     maxAge: 1000 * 60 * 60 * 24, // 24 hours
     httpOnly: true,
-    sameSite: 'none',
-    secure: true
+    sameSite: cookieSameSiteConfig,
+    secure: cookieSecureConfig
   }
 };
 
@@ -569,23 +617,10 @@ app.use((req, res, next) => {
       existingToken = generateAuthToken(req.session.user);
     }
     req.authToken = existingToken;
-  } else if (!req.session?.user && activeTokens.size > 0 && req.path !== '/login' && req.path !== '/logout' && !req.path.startsWith('/health')) {
-    // Auto-recover most recent session in preview / testing environments
-    let latestToken = null;
-    let latestTime = 0;
-    for (const [t, data] of activeTokens.entries()) {
-      if (data.expires > Date.now() && data.created > latestTime) {
-        latestToken = t;
-        latestTime = data.created;
-      }
-    }
-    if (latestToken) {
-      const tokenData = activeTokens.get(latestToken);
-      if (!req.session) req.session = {};
-      req.session.user = tokenData.user;
-      req.authToken = latestToken;
-    }
   }
+
+  // Unauthenticated users remain strictly unauthenticated.
+  // No automatic session assignment or token recovery across visitors.
 
   res.locals.currentUser = req.session?.user || null;
   res.locals.authToken = req.authToken || '';
@@ -753,11 +788,17 @@ app.post('/login', async (req, res) => {
     req.session.user = userSession;
     const token = generateAuthToken(userSession);
 
+    const isHttps = Boolean(req.secure || req.headers['x-forwarded-proto'] === 'https');
+    const cookieSecure = process.env.COOKIE_SECURE !== undefined 
+      ? process.env.COOKIE_SECURE === 'true' 
+      : (isCloudRunPreview ? true : isHttps);
+    const cookieSameSite = process.env.COOKIE_SAMESITE || (isCloudRunPreview ? 'none' : 'lax');
+
     res.cookie('auth_token', token, {
       maxAge: 1000 * 60 * 60 * 24,
       httpOnly: false,
-      sameSite: 'none',
-      secure: true
+      sameSite: cookieSameSite,
+      secure: cookieSecure
     });
 
     req.session.save(err => {
@@ -777,17 +818,24 @@ app.post('/login', async (req, res) => {
   }
 });
 
-app.post('/logout', (req, res) => {
-  req.session.destroy(() => {
+function handleLogout(req, res) {
+  const token = req.authToken || req.query.auth || req.cookies?.auth_token;
+  if (token && activeTokens.has(token)) {
+    activeTokens.delete(token);
+  }
+  res.clearCookie('auth_token');
+  res.clearCookie('connect.sid');
+  if (req.session) {
+    req.session.destroy(() => {
+      res.redirect('/login?msg=logged_out');
+    });
+  } else {
     res.redirect('/login?msg=logged_out');
-  });
-});
+  }
+}
 
-app.get('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.redirect('/login?msg=logged_out');
-  });
-});
+app.post('/logout', handleLogout);
+app.get('/logout', handleLogout);
 
 // -----------------------------------------------------------------------
 // Dashboard Route (Live Stock View: vw_current_stock)
@@ -1478,10 +1526,68 @@ app.get('/melting/prepare', requireAuth, requireRole('FactoryManager'), async (r
     const stocksMap = {};
     stockRes.rows.forEach(r => { stocksMap[r.metal_id] = Number(r.current_balance); });
 
+    let duplicateSession = null;
+    const dupParam = req.query.duplicate || req.query.duplicate_session_id;
+    const dupId = parseInt(dupParam, 10);
+    if (!isNaN(dupId) && dupId > 0) {
+      if (isPostgresConnected && pool) {
+        const sessRes = await pool.query('SELECT * FROM melting_sessions WHERE session_id = $1', [dupId]);
+        if (sessRes.rows.length > 0) {
+          const logsRes = await pool.query(`
+            SELECT l.*, r.scenario_name, r.target_purity
+            FROM melting_logs l
+            LEFT JOIN melting_rules r ON l.rule_id = r.rule_id
+            WHERE l.session_id = $1
+            ORDER BY l.melting_id ASC
+          `, [dupId]);
+
+          duplicateSession = {
+            session_id: dupId,
+            session_info: sessRes.rows[0],
+            batches: logsRes.rows.map(l => ({
+              rule_id: l.rule_id,
+              rule_name: l.scenario_name || 'Standard Charge',
+              target_purity: Number(l.target_purity || 75),
+              c: Number(l.input_c_pure_weight),
+              d: Number(l.input_d_pure_purity),
+              e: Number(l.input_e_metal_weight),
+              f: Number(l.input_f_metal_purity),
+              g: Number(l.total_weight_g),
+              h: Number(l.total_alloy_h)
+            }))
+          };
+        }
+      } else {
+        const sess = memoryLedger.melting_sessions.find(s => s.session_id === dupId);
+        if (sess) {
+          const rawLogs = memoryLedger.melting_logs.filter(l => l.session_id === dupId);
+          duplicateSession = {
+            session_id: dupId,
+            session_info: sess,
+            batches: rawLogs.map(l => {
+              const r = memoryLedger.melting_rules.find(x => x.rule_id === l.rule_id) || {};
+              return {
+                rule_id: l.rule_id,
+                rule_name: r.scenario_name || 'Standard Charge',
+                target_purity: Number(r.target_purity || 75),
+                c: Number(l.input_c_pure_weight),
+                d: Number(l.input_d_pure_purity),
+                e: Number(l.input_e_metal_weight),
+                f: Number(l.input_f_metal_purity),
+                g: Number(l.total_weight_g),
+                h: Number(l.total_alloy_h)
+              };
+            })
+          };
+        }
+      }
+    }
+
     res.render('melting_prepare', {
       rules,
       metals: metalsRes.rows,
-      stocksMap
+      stocksMap,
+      duplicateSession
     });
   } catch (err) {
     console.error('[Melting Prepare Error]', err);
@@ -1971,6 +2077,501 @@ app.post(['/admin/users/delete/:id', '/admin/users/delete'], requireAuth, requir
   } catch (err) {
     console.error('[Delete User Error]', err);
     redirectWithAuth(req, res, '/admin/users?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// =======================================================================
+// ADMIN EMAIL & DAILY REPORT DISPATCH SYSTEM (Admin Role Only)
+// =======================================================================
+
+async function getEmailSettings() {
+  if (isPostgresConnected && pool) {
+    try {
+      const res = await pool.query('SELECT * FROM email_settings WHERE setting_id = 1');
+      if (res.rows.length > 0) return res.rows[0];
+    } catch (e) {
+      console.warn('[Email Settings] Database query failed, using in-memory settings:', e.message);
+    }
+  }
+  return memoryLedger.email_settings;
+}
+
+async function saveEmailSettings(data) {
+  const host = (data.smtp_host || 'smtp.gmail.com').trim();
+  const port = parseInt(data.smtp_port, 10) || 587;
+  const secure = data.smtp_secure === 'true' || data.smtp_secure === true;
+  const user = (data.smtp_user || '').trim();
+  const pass = data.smtp_pass !== undefined ? data.smtp_pass.trim() : '';
+  const senderName = (data.sender_name || 'Alloy Vault Ledger').trim();
+  const recipients = (data.recipient_emails || '').trim();
+  const dailyEnabled = data.daily_report_enabled === 'true' || data.daily_report_enabled === true;
+  const schedTime = (data.scheduled_time || '18:00').trim();
+
+  if (isPostgresConnected && pool) {
+    await pool.query(`
+      INSERT INTO email_settings (setting_id, smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, sender_name, recipient_emails, daily_report_enabled, scheduled_time)
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (setting_id) DO UPDATE SET
+        smtp_host = EXCLUDED.smtp_host,
+        smtp_port = EXCLUDED.smtp_port,
+        smtp_secure = EXCLUDED.smtp_secure,
+        smtp_user = EXCLUDED.smtp_user,
+        smtp_pass = CASE WHEN EXCLUDED.smtp_pass <> '' THEN EXCLUDED.smtp_pass ELSE email_settings.smtp_pass END,
+        sender_name = EXCLUDED.sender_name,
+        recipient_emails = EXCLUDED.recipient_emails,
+        daily_report_enabled = EXCLUDED.daily_report_enabled,
+        scheduled_time = EXCLUDED.scheduled_time
+    `, [host, port, secure, user, pass, senderName, recipients, dailyEnabled, schedTime]);
+  } else {
+    memoryLedger.email_settings.smtp_host = host;
+    memoryLedger.email_settings.smtp_port = port;
+    memoryLedger.email_settings.smtp_secure = secure;
+    memoryLedger.email_settings.smtp_user = user;
+    if (pass !== '') memoryLedger.email_settings.smtp_pass = pass;
+    memoryLedger.email_settings.sender_name = senderName;
+    memoryLedger.email_settings.recipient_emails = recipients;
+    memoryLedger.email_settings.daily_report_enabled = dailyEnabled;
+    memoryLedger.email_settings.scheduled_time = schedTime;
+  }
+}
+
+function createMailTransporter(settings) {
+  const isGmail = (settings.smtp_host || '').toLowerCase().includes('gmail.com');
+  const port = parseInt(settings.smtp_port, 10) || 587;
+  const secure = Boolean(settings.smtp_secure || port === 465);
+
+  const config = {
+    host: settings.smtp_host || 'smtp.gmail.com',
+    port,
+    secure,
+    auth: {
+      user: settings.smtp_user,
+      pass: settings.smtp_pass
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  };
+
+  if (isGmail && !secure && port === 587) {
+    config.service = 'gmail';
+  }
+
+  return nodemailer.createTransport(config);
+}
+
+async function buildDailyEodReportData() {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  let todaysSessions = [];
+  let metalsUsed = [];
+  let currentStocks = [];
+
+  if (isPostgresConnected && pool) {
+    // 1. Todays melting sessions
+    const sessRes = await pool.query(`
+      SELECT session_id, session_date, total_session_weight_g, total_session_alloy_h
+      FROM melting_sessions
+      WHERE session_date >= $1
+      ORDER BY session_id DESC
+    `, [startOfDay]);
+    todaysSessions = sessRes.rows;
+
+    // 2. Itemized metals used today
+    const usedRes = await pool.query(`
+      SELECT m.metal_name, m.purity_grade, m.uom, SUM(t.quantity) as total_used
+      FROM inventory_transactions t
+      JOIN metal_master m ON t.metal_id = m.metal_id
+      WHERE t.transaction_type = 'OUT' AND t.trans_date >= $1
+      GROUP BY m.metal_name, m.purity_grade, m.uom
+      ORDER BY m.metal_name ASC
+    `, [startOfDay]);
+    metalsUsed = usedRes.rows.map(r => ({
+      ...r,
+      total_used: Number(r.total_used)
+    }));
+
+    // 3. Current live inventory stock balances
+    const stockRes = await pool.query(`
+      SELECT metal_name, purity_grade, uom, total_in, total_out, current_balance
+      FROM vw_current_stock
+      ORDER BY metal_name ASC
+    `);
+    currentStocks = stockRes.rows.map(r => ({
+      ...r,
+      total_in: Number(r.total_in),
+      total_out: Number(r.total_out),
+      current_balance: Number(r.current_balance)
+    }));
+  } else {
+    todaysSessions = memoryLedger.melting_sessions.filter(s => new Date(s.session_date) >= startOfDay);
+
+    const outTransToday = memoryLedger.inventory_transactions.filter(t => t.transaction_type === 'OUT' && new Date(t.trans_date) >= startOfDay);
+    const usedMap = {};
+    outTransToday.forEach(t => {
+      const m = memoryLedger.metal_master.find(x => x.metal_id === t.metal_id);
+      if (m) {
+        if (!usedMap[m.metal_id]) {
+          usedMap[m.metal_id] = {
+            metal_name: m.metal_name,
+            purity_grade: m.purity_grade,
+            uom: m.uom || 'g',
+            total_used: 0
+          };
+        }
+        usedMap[m.metal_id].total_used += Number(t.quantity);
+      }
+    });
+    metalsUsed = Object.values(usedMap);
+
+    const stockRes = await executeQuery('SELECT metal_name, purity_grade, uom, total_in, total_out, current_balance FROM vw_current_stock ORDER BY metal_name ASC');
+    currentStocks = stockRes.rows.map(r => ({
+      ...r,
+      total_in: Number(r.total_in),
+      total_out: Number(r.total_out),
+      current_balance: Number(r.current_balance)
+    }));
+  }
+
+  const totalOutputG = todaysSessions.reduce((acc, s) => acc + Number(s.total_session_weight_g), 0);
+  const totalAlloyH = todaysSessions.reduce((acc, s) => acc + Number(s.total_session_alloy_h), 0);
+
+  return {
+    date: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+    sessionsCount: todaysSessions.length,
+    totalOutputG: Math.round(totalOutputG * 1000) / 1000,
+    totalAlloyH: Math.round(totalAlloyH * 1000) / 1000,
+    todaysSessions,
+    metalsUsed,
+    currentStocks
+  };
+}
+
+function generateDailyEmailHtml(report, settings) {
+  const sessionsRows = report.todaysSessions.length > 0
+    ? report.todaysSessions.map(s => `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 10px; font-weight: bold; color: #1e293b;">#${s.session_id}</td>
+          <td style="padding: 10px; color: #475569;">${new Date(s.session_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+          <td style="padding: 10px; text-align: right; font-weight: bold; color: #0f172a;">${Number(s.total_session_weight_g).toFixed(3)} g</td>
+          <td style="padding: 10px; text-align: right; font-weight: bold; color: ${Number(s.total_session_alloy_h) < 0 ? '#dc2626' : '#d97706'};">${Number(s.total_session_alloy_h).toFixed(3)} g</td>
+        </tr>
+      `).join('')
+    : `<tr><td colspan="4" style="padding: 16px; text-align: center; color: #64748b; font-style: italic;">No melting sessions executed today.</td></tr>`;
+
+  const metalsUsedRows = report.metalsUsed.length > 0
+    ? report.metalsUsed.map(m => `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 10px; font-weight: bold; color: #1e293b;">${m.metal_name}</td>
+          <td style="padding: 10px; color: #64748b; font-size: 12px;">${m.purity_grade}</td>
+          <td style="padding: 10px; text-align: right; font-weight: bold; color: #b45309;">${m.total_used.toFixed(3)} ${m.uom}</td>
+        </tr>
+      `).join('')
+    : `<tr><td colspan="3" style="padding: 16px; text-align: center; color: #64748b; font-style: italic;">No metal or alloy movements issued today.</td></tr>`;
+
+  const stockRows = report.currentStocks.map(s => `
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 10px; font-weight: bold; color: #0f172a;">${s.metal_name}</td>
+      <td style="padding: 10px; color: #64748b; font-size: 12px;">${s.purity_grade}</td>
+      <td style="padding: 10px; text-align: right; color: #047857;">+${s.total_in.toFixed(3)}</td>
+      <td style="padding: 10px; text-align: right; color: #b91c1c;">-${s.total_out.toFixed(3)}</td>
+      <td style="padding: 10px; text-align: right; font-weight: bold; font-size: 14px; color: ${s.current_balance < 0 ? '#dc2626' : '#0f172a'};">${s.current_balance.toFixed(3)} ${s.uom}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>End-of-Day Vault Inventory Report</title>
+    </head>
+    <body style="margin: 0; padding: 24px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a;">
+      <div style="max-width: 680px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
+        
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #78350f 0%, #b45309 50%, #d97706 100%); padding: 28px 24px; color: #ffffff;">
+          <table style="width: 100%;">
+            <tr>
+              <td>
+                <span style="font-size: 28px; vertical-align: middle;">⚱</span>
+                <span style="font-size: 20px; font-weight: 800; letter-spacing: 0.5px; vertical-align: middle; margin-left: 8px;">ALLOY VAULT LEDGER</span>
+                <div style="font-size: 13px; opacity: 0.9; margin-top: 4px;">Daily End-of-Day Metallurgical &amp; Stock Summary</div>
+              </td>
+              <td style="text-align: right; font-size: 12px; font-family: monospace; opacity: 0.95;">
+                ${report.date}
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="padding: 24px;">
+
+          <!-- KPI Cards Strip -->
+          <div style="display: table; width: 100%; margin-bottom: 24px;">
+            <div style="display: table-cell; width: 33.3%; padding: 4px;">
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; text-align: center;">
+                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600;">Melting Sessions</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px;">${report.sessionsCount}</div>
+              </div>
+            </div>
+            <div style="display: table-cell; width: 33.3%; padding: 4px;">
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; text-align: center;">
+                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600;">Combined Output (G)</div>
+                <div style="font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 4px;">${report.totalOutputG.toFixed(3)} g</div>
+              </div>
+            </div>
+            <div style="display: table-cell; width: 33.3%; padding: 4px;">
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; text-align: center;">
+                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600;">Alloy Issued (H)</div>
+                <div style="font-size: 20px; font-weight: 800; color: #d97706; margin-top: 4px;">${report.totalAlloyH.toFixed(3)} g</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 1: Melting Sessions -->
+          <div style="margin-bottom: 28px;">
+            <h3 style="font-size: 14px; font-weight: 700; text-transform: uppercase; color: #0f172a; margin: 0 0 10px 0; border-bottom: 2px solid #f59e0b; padding-bottom: 6px;">
+              1. Crucible Melting Sessions Run Today
+            </h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <thead>
+                <tr style="background-color: #f8fafc; border-bottom: 1px solid #cbd5e1; text-align: left; color: #475569; font-size: 11px; text-transform: uppercase;">
+                  <th style="padding: 8px 10px;">Session</th>
+                  <th style="padding: 8px 10px;">Time</th>
+                  <th style="padding: 8px 10px; text-align: right;">Target Weight (G)</th>
+                  <th style="padding: 8px 10px; text-align: right;">Required Alloy (H)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sessionsRows}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Section 2: Metals & Alloys Used Today -->
+          <div style="margin-bottom: 28px;">
+            <h3 style="font-size: 14px; font-weight: 700; text-transform: uppercase; color: #0f172a; margin: 0 0 10px 0; border-bottom: 2px solid #3b82f6; padding-bottom: 6px;">
+              2. Total Metals &amp; Alloys Used / Issued Today
+            </h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <thead>
+                <tr style="background-color: #f8fafc; border-bottom: 1px solid #cbd5e1; text-align: left; color: #475569; font-size: 11px; text-transform: uppercase;">
+                  <th style="padding: 8px 10px;">Metal / Alloy</th>
+                  <th style="padding: 8px 10px;">Purity Grade</th>
+                  <th style="padding: 8px 10px; text-align: right;">Total Issued</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${metalsUsedRows}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Section 3: End of Day Metal & Alloy Balances -->
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 14px; font-weight: 700; text-transform: uppercase; color: #0f172a; margin: 0 0 10px 0; border-bottom: 2px solid #10b981; padding-bottom: 6px;">
+              3. Closing Vault Stock Balances (End of Day)
+            </h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <thead>
+                <tr style="background-color: #f8fafc; border-bottom: 1px solid #cbd5e1; text-align: left; color: #475569; font-size: 11px; text-transform: uppercase;">
+                  <th style="padding: 8px 10px;">Metal Specification</th>
+                  <th style="padding: 8px 10px;">Grade</th>
+                  <th style="padding: 8px 10px; text-align: right;">Total In</th>
+                  <th style="padding: 8px 10px; text-align: right;">Total Out</th>
+                  <th style="padding: 8px 10px; text-align: right;">Available Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${stockRows}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px; text-align: center; font-size: 11px; color: #64748b;">
+          Automated End-of-Day Metallurgical &amp; Vault Inventory Report &bull; Alloy &amp; Melting Transactions System
+        </div>
+
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+async function sendTestEmail(settings, targetEmail) {
+  const transporter = createMailTransporter(settings);
+  await transporter.verify();
+
+  const info = await transporter.sendMail({
+    from: `"${settings.sender_name || 'Alloy Vault Ledger'}" <${settings.smtp_user}>`,
+    to: targetEmail,
+    subject: `[Alloy Vault] SMTP Connection Verified Successfully`,
+    text: `Hello,\n\nYour SMTP server configuration (${settings.smtp_host}:${settings.smtp_port}) has been verified successfully!\n\nAutomated daily EOD reports are configured for dispatch at ${settings.scheduled_time} to: ${settings.recipient_emails}.\n\nAlloy & Melting Transactions Management System`,
+    html: `
+      <div style="font-family: sans-serif; padding: 20px; background-color: #f8fafc; color: #0f172a;">
+        <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;">
+          <h2 style="color: #d97706; margin-top: 0;">✓ SMTP Connection Verified</h2>
+          <p style="font-size: 14px; line-height: 1.5; color: #334155;">
+            Hello,<br><br>
+            Your SMTP email configuration has connected successfully!
+          </p>
+          <div style="background-color: #f1f5f9; padding: 12px; border-radius: 8px; font-size: 12px; font-family: monospace; margin: 16px 0;">
+            Host: ${settings.smtp_host}<br>
+            Port: ${settings.smtp_port}<br>
+            Sender: ${settings.sender_name} &lt;${settings.smtp_user}&gt;<br>
+            Daily Schedule: ${settings.scheduled_time} (Active: ${settings.daily_report_enabled ? 'Yes' : 'No'})<br>
+            Recipients: ${settings.recipient_emails}
+          </div>
+          <p style="font-size: 12px; color: #64748b;">
+            Alloy &amp; Melting Inventory System
+          </p>
+        </div>
+      </div>
+    `
+  });
+
+  return info;
+}
+
+async function sendDailyReportEmail(settings, isManualTrigger = false) {
+  const recipientList = (settings.recipient_emails || '')
+    .split(',')
+    .map(e => e.trim())
+    .filter(Boolean);
+
+  if (recipientList.length === 0) {
+    throw new Error('No recipient email addresses configured.');
+  }
+
+  const transporter = createMailTransporter(settings);
+  const reportData = await buildDailyEodReportData();
+  const htmlContent = generateDailyEmailHtml(reportData, settings);
+
+  const subject = `[Daily Vault Report] ${reportData.date} - ${reportData.sessionsCount} Melting Sessions | Closing Balances`;
+
+  const info = await transporter.sendMail({
+    from: `"${settings.sender_name || 'Alloy Vault Ledger'}" <${settings.smtp_user}>`,
+    to: recipientList.join(', '),
+    subject,
+    text: `Daily End-of-Day Report - ${reportData.date}\nMelting Sessions: ${reportData.sessionsCount}\nCombined Output: ${reportData.totalOutputG} g\nAlloy Issued: ${reportData.totalAlloyH} g\nPlease view this email in an HTML-compatible client to inspect itemized logs and vault stock tables.`,
+    html: htmlContent
+  });
+
+  // Record last sent timestamp
+  const now = new Date();
+  if (isPostgresConnected && pool) {
+    try {
+      await pool.query('UPDATE email_settings SET last_sent_at = $1 WHERE setting_id = 1', [now]);
+    } catch (e) {}
+  } else {
+    memoryLedger.email_settings.last_sent_at = now;
+  }
+
+  return { info, recipients: recipientList };
+}
+
+// Background scheduler for daily email report
+async function checkAndSendDailyReport() {
+  try {
+    const settings = await getEmailSettings();
+    if (!settings || !settings.daily_report_enabled || !settings.smtp_user || !settings.smtp_pass || !settings.recipient_emails) {
+      return;
+    }
+
+    const now = new Date();
+    const currentHHMM = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+
+    if (currentHHMM === settings.scheduled_time) {
+      if (settings.last_sent_at) {
+        const lastSent = new Date(settings.last_sent_at);
+        if (
+          lastSent.getFullYear() === now.getFullYear() &&
+          lastSent.getMonth() === now.getMonth() &&
+          lastSent.getDate() === now.getDate()
+        ) {
+          return;
+        }
+      }
+
+      console.log(`[Scheduler] Auto-dispatching daily EOD email report at ${currentHHMM}...`);
+      await sendDailyReportEmail(settings, false);
+      console.log(`[Scheduler] Daily EOD email report successfully sent.`);
+    }
+  } catch (err) {
+    console.error('[Scheduler Error]', err.message);
+  }
+}
+
+// Check every 30 seconds
+setInterval(checkAndSendDailyReport, 30 * 1000);
+
+// GET /admin/email-settings - View Mail Server Configuration
+app.get('/admin/email-settings', requireAuth, requireRole('Admin'), async (req, res) => {
+  try {
+    const settings = await getEmailSettings();
+    res.render('admin_email_settings', {
+      settings,
+      success: req.query.msg ? decodeURIComponent(req.query.msg) : null,
+      error: req.query.error ? decodeURIComponent(req.query.error) : null
+    });
+  } catch (err) {
+    console.error('[Admin Email Settings Error]', err);
+    res.status(500).send('Error loading email settings: ' + err.message);
+  }
+});
+
+// POST /admin/email-settings - Save Mail Server Configuration
+app.post('/admin/email-settings', requireAuth, requireRole('Admin'), async (req, res) => {
+  try {
+    await saveEmailSettings(req.body);
+    redirectWithAuth(req, res, '/admin/email-settings?msg=' + encodeURIComponent('Email server configuration saved successfully.'));
+  } catch (err) {
+    console.error('[Save Email Settings Error]', err);
+    redirectWithAuth(req, res, '/admin/email-settings?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// POST /admin/email-settings/test - Verify and Send Test Email
+app.post('/admin/email-settings/test', requireAuth, requireRole('Admin'), async (req, res) => {
+  try {
+    const settings = await getEmailSettings();
+    const recipient = (req.body.test_email_recipient || (settings.recipient_emails || '').split(',')[0] || settings.smtp_user || '').trim();
+    if (!recipient) {
+      return redirectWithAuth(req, res, '/admin/email-settings?error=' + encodeURIComponent('Please enter a destination recipient email for the test.'));
+    }
+    if (!settings.smtp_user || !settings.smtp_pass) {
+      return redirectWithAuth(req, res, '/admin/email-settings?error=' + encodeURIComponent('Please save your SMTP Username and Password/App Password first.'));
+    }
+
+    await sendTestEmail(settings, recipient);
+    redirectWithAuth(req, res, '/admin/email-settings?msg=' + encodeURIComponent(`Test email successfully delivered to ${recipient}. SMTP Connection verified!`));
+  } catch (err) {
+    console.error('[Test Email Error]', err);
+    redirectWithAuth(req, res, '/admin/email-settings?error=' + encodeURIComponent('SMTP Verification Failed: ' + err.message));
+  }
+});
+
+// POST /admin/email-settings/send-daily-now - Immediate Manual Dispatch
+app.post('/admin/email-settings/send-daily-now', requireAuth, requireRole('Admin'), async (req, res) => {
+  try {
+    const settings = await getEmailSettings();
+    if (!settings.smtp_user || !settings.smtp_pass) {
+      return redirectWithAuth(req, res, '/admin/email-settings?error=' + encodeURIComponent('Please save your SMTP Username and Password/App Password first.'));
+    }
+    if (!settings.recipient_emails) {
+      return redirectWithAuth(req, res, '/admin/email-settings?error=' + encodeURIComponent('Please specify at least one recipient email address.'));
+    }
+
+    const result = await sendDailyReportEmail(settings, true);
+    redirectWithAuth(req, res, '/admin/email-settings?msg=' + encodeURIComponent(`Today's daily EOD report successfully emailed to ${result.recipients.join(', ')}!`));
+  } catch (err) {
+    console.error('[Send Daily Report Error]', err);
+    redirectWithAuth(req, res, '/admin/email-settings?error=' + encodeURIComponent('Dispatch Failed: ' + err.message));
   }
 });
 

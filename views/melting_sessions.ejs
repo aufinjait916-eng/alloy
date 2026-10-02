@@ -112,6 +112,16 @@
                       View Details &rarr;
                     </a>
                     <% if (currentUser && currentUser.role === 'FactoryManager') { %>
+                      <a 
+                        href="<%= authUrl('/melting/prepare?duplicate=' + s.session_id) %>" 
+                        class="text-xs font-semibold text-blue-400 hover:text-blue-300 bg-slate-950 hover:bg-blue-950/40 px-2.5 py-1.5 rounded-lg border border-blue-500/40 hover:border-blue-400 transition inline-flex items-center gap-1"
+                        title="Duplicate this melting session with exact values"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Duplicate
+                      </a>
                       <button 
                         type="button" 
                         onclick="openDeleteSessionModal('<%= s.session_id %>', '<%= Number(s.total_session_weight_g).toFixed(3) %>', '<%= Number(s.total_session_alloy_h).toFixed(3) %>')"

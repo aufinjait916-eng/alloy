@@ -92,7 +92,7 @@
                 id="target_purity" 
                 name="target_purity" 
                 required 
-                value="<%= mode === 'edit' ? Number(rule.target_purity).toFixed(2) : '75.00' %>"
+                value="<%= mode === 'edit' ? Number(rule.target_purity).toFixed(2) : '' %>"
                 placeholder="75.00" 
                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
               />
@@ -139,8 +139,8 @@
                 id="compute_percentage" 
                 name="compute_percentage" 
                 required 
-                value="<%= mode === 'edit' ? Number(rule.compute_percentage).toFixed(2) : '142.86' %>"
-                placeholder="142.86" 
+                value="<%= mode === 'edit' ? Number(rule.compute_percentage).toFixed(2) : '' %>"
+                placeholder="e.g. 142.86" 
                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
               />
               <span class="absolute inset-y-0 right-0 pr-4 flex items-center text-xs font-mono text-slate-500">%</span>
@@ -163,8 +163,9 @@
               id="purity_min" 
               name="purity_min" 
               required 
-              value="<%= mode === 'edit' ? Number(rule.purity_min).toFixed(2) : '50.00' %>"
-              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-amber-500 transition"
+              value="<%= mode === 'edit' ? Number(rule.purity_min).toFixed(2) : '' %>"
+              placeholder="e.g. 50.00"
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500 transition"
             />
           </div>
 
@@ -180,8 +181,9 @@
               id="purity_max" 
               name="purity_max" 
               required 
-              value="<%= mode === 'edit' ? Number(rule.purity_max).toFixed(2) : '80.00' %>"
-              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-amber-500 transition"
+              value="<%= mode === 'edit' ? Number(rule.purity_max).toFixed(2) : '' %>"
+              placeholder="e.g. 80.00"
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500 transition"
             />
           </div>
         </div>
@@ -372,8 +374,8 @@
         if (varHelp) varHelp.textContent = 'Direct conversion: Calculates target weight (G) and required alloy (H) directly from user-entered weight and purity';
         pctContainer.classList.add('opacity-50');
       } else {
-        if (pctInput.value === '0' || pctInput.value === '0.00' || !pctInput.value) {
-          pctInput.value = '100.00';
+        if (pctInput.value === '0.00') {
+          pctInput.value = '';
         }
         pctInput.required = true;
         if (pctRequired) pctRequired.classList.remove('hidden');
@@ -390,9 +392,9 @@
           addComponentRow(c.metal_id, (Number(c.percentage) * 100).toFixed(2));
         });
       } else {
-        // Defaults: Copper 60%, Silver 40% if available
-        addComponentRow(3, '60.00');
-        addComponentRow(2, '40.00');
+        // Clear inputs: start with blank component rows
+        addComponentRow('', '');
+        addComponentRow('', '');
       }
       recalcTotalSum();
       onComputeVarChange();
